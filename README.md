@@ -1,1 +1,56 @@
-# grocery-tracker
+# 🥕 Grocery Tracker
+
+A mobile-first web app for keeping track of what groceries you have and when to toss them. Snap a photo of your receipt, confirm the items, and everything gets sorted into **🧊 Fridge**, **❄️ Freezer**, and **🥫 Pantry** with expiry dates.
+
+## Features
+
+- **📷 Receipt scanning** — take a photo of your receipt right from your phone camera. Text is read on-device with [Tesseract.js](https://tesseract.projectnaptha.com/) OCR (vendored in this repo), so your receipts never leave your phone.
+- **🧠 Smart guesses** — a built-in shelf-life database of 100+ common foods (including receipt abbreviations like `BNLS CHKN BRST` and `GRND BF`) auto-assigns each item a location and a "use or toss by" date. You review and fix anything before saving.
+- **🗂️ Fridge / Freezer / Pantry tabs** — each with counts and red badges for expired items.
+- **🗑️ Toss alerts** — expired items are flagged with a header chip; tap it for a one-screen "time to toss" list you can clear in one tap.
+- **✏️ Manual add & edit** — typing a name (e.g. "yogurt") auto-suggests location and expiry. Tap any item to edit it, mark it **✓ Used**, or **🗑️ Toss** it.
+- **📱 Installable PWA** — add it to your phone's home screen and it works like an app, including offline (after the first scan the OCR engine is cached too).
+- **🔒 Private by design** — no accounts, no server, no tracking. Your inventory lives in your browser's local storage.
+
+## Running it
+
+It's a static site — no build step, no dependencies to install.
+
+```bash
+# any static file server works, e.g.:
+python3 -m http.server 8000
+# then open http://localhost:8000
+```
+
+To use it from your phone, host it anywhere that serves static files over HTTPS (required for the camera and PWA install):
+
+- **GitHub Pages** (free): repo Settings → Pages → deploy from the `main` branch. Then open the Pages URL on your phone and "Add to Home Screen".
+- Netlify, Cloudflare Pages, Vercel, etc. all work the same way — just point them at the repo root.
+
+## How receipt scanning works
+
+1. Tap **＋ → Scan a receipt** and photograph the receipt (flat, well-lit, straight-on works best).
+2. OCR runs on-device; lines with prices are treated as candidate items, while totals, tax, and payment lines are filtered out.
+3. Each item is matched against the shelf-life database ([`js/foodData.js`](js/foodData.js)) to guess where it lives and how long it lasts.
+4. You review the list — uncheck non-food items, fix names, adjust dates — then save.
+
+OCR on crumpled receipts is imperfect, so the review step is always shown. Anything it misses can be added with **＋ Add a missed item** on the same screen.
+
+## Project layout
+
+```
+index.html            app shell (tabs, modals)
+css/styles.css        mobile-first styling, light + dark mode
+js/app.js             UI logic and state
+js/store.js           localStorage persistence
+js/parser.js          receipt text → item candidates
+js/foodData.js        shelf-life / location knowledge base
+js/ocr.js             Tesseract.js wrapper
+vendor/tesseract/     vendored OCR engine (JS + WASM + English data)
+sw.js                 service worker (offline caching)
+manifest.webmanifest  PWA manifest
+```
+
+## Tweaking shelf lives
+
+All food knowledge is in [`js/foodData.js`](js/foodData.js) — each entry is a list of keywords with a location and a number of days. Edit it to match how you actually store things (e.g. if you keep bread in the freezer).
