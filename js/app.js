@@ -360,6 +360,115 @@ $('btn-toss-all').addEventListener('click', () => {
   render();
 });
 
+// ---------- backup: export & import ----------
+
+const BACKUP_VERSION = 1;
+let pendingImport = null;
+
+$('btn-backup').addEventListener('click', () => $('backup-backdrop').classList.remove('hidden'));
+$('btn-backup-cancel').addEventListener('click', () => $('backup-backdrop').classList.add('hidden'));
+
+$('btn-export').addEventListener('click', () => {
+  const payload = {
+    app: 'grocery-tracker',
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    items,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `grocery-backup-${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  $('backup-backdrop').classList.add('hidden');
+});
+
+$('btn-import').addEventListener('click', () => {
+  $('import-input').value = '';
+  $('import-input').click();
+});
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function sanitizeItems(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r.name !== 'string' || !r.name.trim()) continue;
+    out.push({
+      id: typeof r.id === 'string' && r.id ? r.id : newId(),
+      name: r.name.trim().slice(0, 80),
+      location: Object.hasOwn(LOCATIONS, r.location) ? r.location : 'pantry',
+      expiresAt: DATE_RE.test(r.expiresAt || '') ? r.expiresAt : addDays(7),
+      addedAt: DATE_RE.test(r.addedAt || '') ? r.addedAt : todayStr(),
+    });
+  }
+  return out;
+}
+
+$('import-input').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  $('backup-backdrop').classList.add('hidden');
+  let imported = [];
+  let exportedAt = null;
+  try {
+    const data = JSON.parse(await file.text());
+    exportedAt = typeof data.exportedAt === 'string' ? data.exportedAt.slice(0, 10) : null;
+    imported = sanitizeItems(Array.isArray(data) ? data : data.items);
+  } catch {
+    imported = [];
+  }
+  if (!imported.length) {
+    $('import-summary').textContent = "That file doesn't look like a Grocery Tracker backup — no items found in it.";
+    $('btn-import-merge').classList.add('hidden');
+    $('btn-import-replace').classList.add('hidden');
+  } else {
+    $('import-summary').textContent =
+      `Found ${imported.length} item${imported.length === 1 ? '' : 's'}` +
+      (exportedAt ? ` from a backup saved ${exportedAt}.` : '.') +
+      ` Merge them into your current list (${items.length} item${items.length === 1 ? '' : 's'}), or replace it entirely?`;
+    $('btn-import-merge').classList.remove('hidden');
+    $('btn-import-replace').classList.remove('hidden');
+  }
+  pendingImport = imported;
+  $('import-backdrop').classList.remove('hidden');
+});
+
+function finishImport(merged) {
+  items = merged;
+  persist();
+  pendingImport = null;
+  $('import-backdrop').classList.add('hidden');
+  render();
+}
+
+$('btn-import-merge').addEventListener('click', () => {
+  if (!pendingImport) return;
+  const have = new Set(items.map((i) => i.id));
+  const dupes = new Set(items.map((i) => `${i.name.toLowerCase()}|${i.location}|${i.expiresAt}`));
+  const merged = items.concat(
+    pendingImport.filter(
+      (i) => !have.has(i.id) && !dupes.has(`${i.name.toLowerCase()}|${i.location}|${i.expiresAt}`)
+    )
+  );
+  finishImport(merged);
+});
+
+$('btn-import-replace').addEventListener('click', () => {
+  if (!pendingImport) return;
+  finishImport(pendingImport);
+});
+
+$('btn-import-cancel').addEventListener('click', () => {
+  pendingImport = null;
+  $('import-backdrop').classList.add('hidden');
+});
+
 // ---------- tabs ----------
 
 document.querySelectorAll('.tab').forEach((tab) =>
@@ -370,7 +479,7 @@ document.querySelectorAll('.tab').forEach((tab) =>
 );
 
 // Close modals when tapping the dimmed backdrop
-for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop']) {
+for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop']) {
   $(id).addEventListener('click', (e) => {
     if (e.target === e.currentTarget && id !== 'scan-backdrop') e.currentTarget.classList.add('hidden');
   });

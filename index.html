@@ -15,7 +15,10 @@
 <body>
   <header class="app-header">
     <h1>🥕 Grocery Tracker</h1>
-    <button id="alert-chip" class="alert-chip hidden" type="button"></button>
+    <div class="header-actions">
+      <button id="alert-chip" class="alert-chip hidden" type="button"></button>
+      <button id="btn-backup" class="icon-btn" type="button" aria-label="Backup">💾</button>
+    </div>
   </header>
 
   <main id="main">
@@ -50,6 +53,31 @@
     </div>
   </div>
   <input id="receipt-input" type="file" accept="image/*" capture="environment" hidden>
+
+  <!-- Backup sheet -->
+  <div id="backup-backdrop" class="backdrop hidden">
+    <div class="sheet" role="dialog" aria-label="Backup">
+      <h2 class="sheet-title">💾 Backup</h2>
+      <p class="muted small sheet-note">Your list lives only on this phone. Export saves a backup file to your Files/Downloads; import brings one back.</p>
+      <button id="btn-export" class="sheet-btn" type="button">📤 Export backup file</button>
+      <button id="btn-import" class="sheet-btn" type="button">📥 Import backup file</button>
+      <button id="btn-backup-cancel" class="sheet-btn cancel" type="button">Cancel</button>
+    </div>
+  </div>
+  <input id="import-input" type="file" accept=".json,application/json" hidden>
+
+  <!-- Import confirm modal -->
+  <div id="import-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Import backup">
+      <h2>📥 Import backup</h2>
+      <p id="import-summary" class="muted small"></p>
+      <div class="modal-actions">
+        <button id="btn-import-cancel" class="btn ghost" type="button">Cancel</button>
+        <button id="btn-import-replace" class="btn danger" type="button">Replace all</button>
+        <button id="btn-import-merge" class="btn primary" type="button">Merge in</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Scan / review modal -->
   <div id="scan-backdrop" class="backdrop hidden">

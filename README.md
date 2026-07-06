@@ -10,6 +10,7 @@ A mobile-first web app for keeping track of what groceries you have and when to 
 - **🗑️ Toss alerts** — expired items are flagged with a header chip; tap it for a one-screen "time to toss" list you can clear in one tap.
 - **✏️ Manual add & edit** — typing a name (e.g. "yogurt") auto-suggests location and expiry. Tap any item to edit it, mark it **✓ Used**, or **🗑️ Toss** it.
 - **📱 Installable PWA** — add it to your phone's home screen and it works like an app, including offline (after the first scan the OCR engine is cached too).
+- **💾 Backup & restore** — tap the 💾 button to export your whole list as a JSON file saved to your phone (Files/Downloads), and import it back any time. Importing lets you **merge** with what's there (duplicates skipped) or **replace** everything — handy for moving to a new phone or recovering after clearing browser data.
 - **🔒 Private by design** — no accounts, no server, no tracking. Your inventory lives in your browser's local storage.
 
 ## Running it
