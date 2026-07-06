@@ -14,7 +14,7 @@ export function guessFood(name) {
   for (const entry of FOOD_DB) {
     for (const kw of entry.keywords) {
       if (n.includes(kw)) {
-        return { location: entry.location, days: entry.days, matched: true };
+        return { location: entry.location, days: entry.days, emoji: entry.emoji, matched: true };
       }
     }
   }
@@ -65,7 +65,7 @@ export function parseReceiptText(text) {
     const key = pretty.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push({ name: pretty, location: guess.location, days: guess.days, matched: guess.matched });
+    items.push({ name: pretty, location: guess.location, days: guess.days, emoji: guess.emoji, matched: guess.matched });
   }
 
   return items;

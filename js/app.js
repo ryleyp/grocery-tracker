@@ -3,9 +3,9 @@ import { parseReceiptText, guessFood } from './parser.js';
 import { recognizeReceipt } from './ocr.js';
 
 const LOCATIONS = {
-  fridge: { label: 'Fridge', emoji: '🧊' },
-  freezer: { label: 'Freezer', emoji: '❄️' },
-  pantry: { label: 'Pantry', emoji: '🥫' },
+  fridge: { label: 'Fridge', emoji: '🧊', empty: 'Your fridge is empty!' },
+  freezer: { label: 'Freezer', emoji: '❄️', empty: 'Nothing chilling in here!' },
+  pantry: { label: 'Pantry', emoji: '🥫', empty: 'The pantry is bare!' },
 };
 
 const SOON_DAYS = 3;
@@ -46,11 +46,15 @@ function expiryStatus(item) {
 
 function expiryText(item) {
   const left = daysLeft(item.expiresAt);
-  if (left < 0) return left === -1 ? 'Expired yesterday — toss it' : `Expired ${-left} days ago — toss it`;
-  if (left === 0) return 'Use today!';
+  if (left < 0) return left === -1 ? 'Expired yesterday — toss it! 🙊' : `Expired ${-left} days ago — toss it! 🙊`;
+  if (left === 0) return 'Use it today! 🍽️';
   if (left === 1) return 'Use by tomorrow';
-  if (left <= SOON_DAYS) return `${left} days left`;
-  return `Good for ${left} days`;
+  if (left <= SOON_DAYS) return `Only ${left} days left`;
+  return `Happy for ${left} more days`;
+}
+
+function itemEmoji(item) {
+  return item.emoji || guessFood(item.name).emoji;
 }
 
 // ---------- rendering ----------
@@ -63,12 +67,14 @@ function render() {
   const loc = LOCATIONS[currentTab];
   $('section-title').textContent = `${loc.emoji} ${loc.label}`;
   $('empty-emoji').textContent = loc.emoji;
+  $('empty-text').textContent = loc.empty;
 
   const list = items
     .filter((i) => i.location === currentTab)
     .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.name.localeCompare(b.name));
 
   $('section-count').textContent = list.length ? `${list.length} item${list.length === 1 ? '' : 's'}` : '';
+  $('section-count').classList.toggle('hidden', !list.length);
   $('empty-state').classList.toggle('hidden', list.length > 0);
 
   const ul = $('item-list');
@@ -99,6 +105,10 @@ function itemCard(item, { tossOnly = false } = {}) {
   const status = expiryStatus(item);
   li.className = `item-card ${status}`;
 
+  const bubble = document.createElement('div');
+  bubble.className = 'item-emoji';
+  bubble.textContent = itemEmoji(item);
+
   const main = document.createElement('div');
   main.className = 'item-main';
   const name = document.createElement('div');
@@ -123,7 +133,7 @@ function itemCard(item, { tossOnly = false } = {}) {
     if (tossOnly) renderTossList();
   });
 
-  li.append(main, btn);
+  li.append(bubble, main, btn);
   return li;
 }
 

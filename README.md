@@ -22,10 +22,15 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-To use it from your phone, host it anywhere that serves static files over HTTPS (required for the camera and PWA install):
+### Hosting on GitHub Pages (automatic)
 
-- **GitHub Pages** (free): repo Settings → Pages → deploy from the `main` branch. Then open the Pages URL on your phone and "Add to Home Screen".
-- Netlify, Cloudflare Pages, Vercel, etc. all work the same way — just point them at the repo root.
+This repo ships with a GitHub Actions workflow ([`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)) that deploys the app to GitHub Pages on every push to `main`. After the first merge to `main`, the app is live at:
+
+**https://ryleyp.github.io/grocery-tracker/**
+
+Open that on your phone and "Add to Home Screen" to install it like an app. If the first workflow run can't enable Pages by itself, flip it on once in repo **Settings → Pages → Source: GitHub Actions** and re-run the workflow.
+
+Netlify, Cloudflare Pages, Vercel, etc. also work — just point them at the repo root (any HTTPS static host is fine; HTTPS is required for the camera and PWA install).
 
 ## How receipt scanning works
 
