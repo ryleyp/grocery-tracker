@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#4779cc">
+  <title>Grocery Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>🥕 Grocery Tracker</h1>
+    <div class="header-actions">
+      <button id="alert-chip" class="alert-chip hidden" type="button"></button>
+      <button id="btn-backup" class="icon-btn" type="button" aria-label="Backup">💾</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="inventory">
+      <div class="section-head">
+        <h2 id="section-title">Fridge</h2>
+        <span id="section-count" class="count-pill"></span>
+      </div>
+      <ul id="item-list" class="item-list"></ul>
+      <div id="empty-state" class="empty-state hidden">
+        <p class="empty-emoji" id="empty-emoji">🧊</p>
+        <p id="empty-text">Nothing in here yet.</p>
+        <p class="muted">Tap <strong>＋</strong> to scan a receipt or add items 🧾</p>
+      </div>
+    </section>
+
+    <section id="spend" class="hidden">
+      <div class="section-head">
+        <h2>💸 Spending</h2>
+      </div>
+      <div class="spend-hero">
+        <p class="spend-label">This month</p>
+        <p class="spend-amount" id="spend-amount">$0.00</p>
+        <p class="spend-sub" id="spend-sub"></p>
+      </div>
+      <ul id="month-list" class="month-list"></ul>
+      <p class="muted small">Totals come from item prices captured off your receipts and screenshots — you can fix any price while reviewing a scan or editing an item.</p>
+    </section>
+  </main>
+
+  <button id="fab" class="fab" type="button" aria-label="Add items">＋</button>
+
+  <nav class="tab-bar">
+    <button class="tab active" data-tab="fridge" type="button"><span class="tab-icon">🧊</span>Fridge<span class="tab-badge hidden" data-badge="fridge"></span></button>
+    <button class="tab" data-tab="freezer" type="button"><span class="tab-icon">❄️</span>Freezer<span class="tab-badge hidden" data-badge="freezer"></span></button>
+    <button class="tab" data-tab="pantry" type="button"><span class="tab-icon">🥫</span>Pantry<span class="tab-badge hidden" data-badge="pantry"></span></button>
+    <button class="tab" data-tab="spend" type="button"><span class="tab-icon">💸</span>Spend</button>
+  </nav>
+
+  <!-- Add choice sheet -->
+  <div id="sheet-backdrop" class="backdrop hidden">
+    <div class="sheet" role="dialog" aria-label="Add items">
+      <button id="btn-scan" class="sheet-btn" type="button">📷 Snap a paper receipt</button>
+      <button id="btn-upload" class="sheet-btn" type="button">🖼️ Upload a screenshot or photo</button>
+      <button id="btn-manual" class="sheet-btn" type="button">✏️ Add item manually</button>
+      <button id="btn-sheet-cancel" class="sheet-btn cancel" type="button">Cancel</button>
+    </div>
+  </div>
+  <input id="receipt-input" type="file" accept="image/*" capture="environment" hidden>
+  <input id="upload-input" type="file" accept="image/*" hidden>
+
+  <!-- Backup sheet -->
+  <div id="backup-backdrop" class="backdrop hidden">
+    <div class="sheet" role="dialog" aria-label="Backup">
+      <h2 class="sheet-title">💾 Backup</h2>
+      <p class="muted small sheet-note">Your list lives only on this phone. Export saves a backup file to your Files/Downloads; import brings one back.</p>
+      <button id="btn-export" class="sheet-btn" type="button">📤 Export backup file</button>
+      <button id="btn-import" class="sheet-btn" type="button">📥 Import backup file</button>
+      <button id="btn-backup-cancel" class="sheet-btn cancel" type="button">Cancel</button>
+    </div>
+  </div>
+  <input id="import-input" type="file" accept=".json,application/json" hidden>
+
+  <!-- Import confirm modal -->
+  <div id="import-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Import backup">
+      <h2>📥 Import backup</h2>
+      <p id="import-summary" class="muted small"></p>
+      <div class="modal-actions">
+        <button id="btn-import-cancel" class="btn ghost" type="button">Cancel</button>
+        <button id="btn-import-replace" class="btn danger" type="button">Replace all</button>
+        <button id="btn-import-merge" class="btn primary" type="button">Merge in</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scan / review modal -->
+  <div id="scan-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Review receipt items">
+      <div id="scan-progress" class="scan-progress">
+        <div class="spinner"></div>
+        <p id="scan-status">Reading your receipt…</p>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+      </div>
+      <div id="scan-review" class="hidden">
+        <h2>Found on your receipt</h2>
+        <p class="muted small">Uncheck anything that isn't food. Fix names, spots, and expiry dates as needed.</p>
+        <ul id="review-list" class="review-list"></ul>
+        <button id="btn-review-add-row" class="link-btn" type="button">＋ Add a missed item</button>
+        <div class="modal-actions">
+          <button id="btn-review-cancel" class="btn ghost" type="button">Cancel</button>
+          <button id="btn-review-save" class="btn primary" type="button">Add items</button>
+        </div>
+      </div>
+      <div id="scan-error" class="hidden">
+        <h2>Couldn't read that 😕</h2>
+        <p id="scan-error-msg" class="muted"></p>
+        <div class="modal-actions">
+          <button id="btn-error-close" class="btn ghost" type="button">Close</button>
+          <button id="btn-error-manual" class="btn primary" type="button">Add manually</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / edit item modal -->
+  <div id="edit-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Edit item">
+      <h2 id="edit-title">Add item</h2>
+      <label class="field">Name
+        <input id="edit-name" type="text" placeholder="e.g. Milk" autocomplete="off">
+      </label>
+      <label class="field">Where it lives
+        <select id="edit-location">
+          <option value="fridge">🧊 Fridge</option>
+          <option value="freezer">❄️ Freezer</option>
+          <option value="pantry">🥫 Pantry</option>
+        </select>
+      </label>
+      <label class="field">Use or toss by
+        <input id="edit-expires" type="date">
+      </label>
+      <label class="field">What it cost (optional)
+        <input id="edit-price" type="number" inputmode="decimal" step="0.01" min="0" placeholder="$0.00">
+      </label>
+      <div class="modal-actions">
+        <button id="btn-edit-delete" class="btn danger hidden" type="button">Toss it</button>
+        <button id="btn-edit-cancel" class="btn ghost" type="button">Cancel</button>
+        <button id="btn-edit-save" class="btn primary" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toss-out modal -->
+  <div id="toss-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Items to throw out">
+      <h2>🗑️ Time to toss</h2>
+      <p class="muted small">These are past their date. Tap ✓ once they're in the bin.</p>
+      <ul id="toss-list" class="item-list"></ul>
+      <div class="modal-actions">
+        <button id="btn-toss-close" class="btn ghost" type="button">Close</button>
+        <button id="btn-toss-all" class="btn danger" type="button">Tossed them all</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
