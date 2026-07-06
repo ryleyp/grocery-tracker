@@ -1,4 +1,4 @@
-const CACHE = 'grocery-tracker-v3';
+const CACHE = 'grocery-tracker-v4';
 
 const APP_SHELL = [
   '.',

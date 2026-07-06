@@ -34,6 +34,19 @@
         <p class="muted">Tap <strong>＋</strong> to scan a receipt or add items 🧾</p>
       </div>
     </section>
+
+    <section id="spend" class="hidden">
+      <div class="section-head">
+        <h2>💸 Spending</h2>
+      </div>
+      <div class="spend-hero">
+        <p class="spend-label">This month</p>
+        <p class="spend-amount" id="spend-amount">$0.00</p>
+        <p class="spend-sub" id="spend-sub"></p>
+      </div>
+      <ul id="month-list" class="month-list"></ul>
+      <p class="muted small">Totals come from item prices captured off your receipts and screenshots — you can fix any price while reviewing a scan or editing an item.</p>
+    </section>
   </main>
 
   <button id="fab" class="fab" type="button" aria-label="Add items">＋</button>
@@ -42,17 +55,20 @@
     <button class="tab active" data-tab="fridge" type="button"><span class="tab-icon">🧊</span>Fridge<span class="tab-badge hidden" data-badge="fridge"></span></button>
     <button class="tab" data-tab="freezer" type="button"><span class="tab-icon">❄️</span>Freezer<span class="tab-badge hidden" data-badge="freezer"></span></button>
     <button class="tab" data-tab="pantry" type="button"><span class="tab-icon">🥫</span>Pantry<span class="tab-badge hidden" data-badge="pantry"></span></button>
+    <button class="tab" data-tab="spend" type="button"><span class="tab-icon">💸</span>Spend</button>
   </nav>
 
   <!-- Add choice sheet -->
   <div id="sheet-backdrop" class="backdrop hidden">
     <div class="sheet" role="dialog" aria-label="Add items">
-      <button id="btn-scan" class="sheet-btn" type="button">📷 Scan a receipt</button>
+      <button id="btn-scan" class="sheet-btn" type="button">📷 Snap a paper receipt</button>
+      <button id="btn-upload" class="sheet-btn" type="button">🖼️ Upload a screenshot or photo</button>
       <button id="btn-manual" class="sheet-btn" type="button">✏️ Add item manually</button>
       <button id="btn-sheet-cancel" class="sheet-btn cancel" type="button">Cancel</button>
     </div>
   </div>
   <input id="receipt-input" type="file" accept="image/*" capture="environment" hidden>
+  <input id="upload-input" type="file" accept="image/*" hidden>
 
   <!-- Backup sheet -->
   <div id="backup-backdrop" class="backdrop hidden">
@@ -124,6 +140,9 @@
       </label>
       <label class="field">Use or toss by
         <input id="edit-expires" type="date">
+      </label>
+      <label class="field">What it cost (optional)
+        <input id="edit-price" type="number" inputmode="decimal" step="0.01" min="0" placeholder="$0.00">
       </label>
       <div class="modal-actions">
         <button id="btn-edit-delete" class="btn danger hidden" type="button">Toss it</button>

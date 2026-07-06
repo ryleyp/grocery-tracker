@@ -456,6 +456,82 @@ main {
   outline-offset: -1px;
 }
 
+/* ---------- spend view ---------- */
+
+.spend-hero {
+  background: linear-gradient(135deg, #4ec788, #2e9c60);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(46, 156, 96, 0.3);
+  margin-bottom: 16px;
+}
+
+.spend-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.spend-amount {
+  margin: 6px 0 4px;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.spend-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.month-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 11px 14px;
+  box-shadow: var(--shadow);
+}
+
+.month-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 7px;
+}
+
+.month-top span:last-child { color: var(--muted); font-weight: 600; }
+
+.month-bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bubble);
+  overflow: hidden;
+}
+
+.month-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4ec788, #2e9c60);
+  border-radius: 4px;
+}
+
 /* ---------- scan progress ---------- */
 
 .scan-progress { text-align: center; padding: 26px 0; }
@@ -503,7 +579,7 @@ main {
 
 .review-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 8px 10px;
   align-items: center;
   background: var(--bubble);
@@ -537,8 +613,11 @@ main {
   gap: 8px;
 }
 
+.review-meta { min-width: 0; }
+.review-meta .review-price { flex: 0 0 68px; }
+
 .review-meta select,
-.review-meta input[type="date"] {
+.review-meta input {
   flex: 1;
   min-width: 0;
   padding: 9px;

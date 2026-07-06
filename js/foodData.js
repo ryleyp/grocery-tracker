@@ -25,7 +25,7 @@ export const FOOD_DB = [
   // Fresh meat & seafood (short!)
   { keywords: ['ground beef', 'grnd beef', 'grnd bf', 'grd bf', 'gr beef', 'ground turkey', 'grnd trky', 'mince'], location: 'fridge', days: 2, emoji: '🥩' },
   { keywords: ['chicken', 'chkn', 'chick brst', 'drumstick', 'thigh'], location: 'fridge', days: 2, emoji: '🍗' },
-  { keywords: ['beef', 'steak', 'sirloin', 'ribeye', 'roast'], location: 'fridge', days: 3, emoji: '🥩' },
+  { keywords: ['beef', 'steak', 'sirloin', 'ribeye', 'roast beef', 'chuck roast', 'pot roast', 'rump roast'], location: 'fridge', days: 3, emoji: '🥩' },
   { keywords: ['pork', 'chop', 'ribs', 'tenderloin'], location: 'fridge', days: 3, emoji: '🍖' },
   { keywords: ['turkey', 'trky'], location: 'fridge', days: 2, emoji: '🦃' },
   { keywords: ['salmon', 'slmn', 'tilapia', 'cod ', 'shrimp', 'shrmp', 'fish', 'tuna steak', 'seafood', 'crab', 'scallop'], location: 'fridge', days: 2, emoji: '🐟' },
@@ -94,7 +94,7 @@ export const FOOD_DB = [
   { keywords: ['oil', 'olive oil', 'canola', 'vegetable oil', 'evoo'], location: 'pantry', days: 365, emoji: '🫒' },
   { keywords: ['vinegar', 'soy sauce', 'worcestershire', 'fish sauce'], location: 'pantry', days: 365, emoji: '🫙' },
   { keywords: ['coffee', 'coff', 'espresso', 'tea ', 'teabag'], location: 'pantry', days: 365, emoji: '☕' },
-  { keywords: ['spice', 'salt', 'peppercorn', 'cumin', 'paprika', 'oregano', 'cinnamon', 'seasoning', 'ssnng'], location: 'pantry', days: 365, emoji: '🧂' },
+  { keywords: ['spice', 'salt ', 'peppercorn', 'cumin', 'paprika', 'oregano', 'cinnamon', 'seasoning', 'ssnng'], location: 'pantry', days: 365, emoji: '🧂' },
   { keywords: ['nut ', 'nuts', 'almond', 'cashew', 'peanut', 'pistachio', 'walnut', 'pecan', 'trail mix'], location: 'pantry', days: 120, emoji: '🥜' },
   { keywords: ['raisin', 'dried fruit', 'date ', 'dates', 'craisin'], location: 'pantry', days: 180, emoji: '🍇' },
   { keywords: ['honey', 'syrup', 'maple'], location: 'pantry', days: 730, emoji: '🍯' },

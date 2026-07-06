@@ -4,9 +4,10 @@ A mobile-first web app for keeping track of what groceries you have and when to 
 
 ## Features
 
-- **📷 Receipt scanning** — take a photo of your receipt right from your phone camera. Text is read on-device with [Tesseract.js](https://tesseract.projectnaptha.com/) OCR (vendored in this repo), so your receipts never leave your phone.
+- **📷 Receipt & screenshot scanning** — snap a paper receipt with your phone camera, or upload a screenshot of a mobile order (Walmart, Instacart, etc.). Text is read on-device with [Tesseract.js](https://tesseract.projectnaptha.com/) OCR (vendored in this repo), so your receipts never leave your phone.
 - **🧠 Smart guesses** — a built-in shelf-life database of 100+ common foods (including receipt abbreviations like `BNLS CHKN BRST` and `GRND BF`) auto-assigns each item a location and a "use or toss by" date. You review and fix anything before saving.
 - **🗂️ Fridge / Freezer / Pantry tabs** — each with counts and red badges for expired items.
+- **💸 Monthly spending** — prices are captured off receipts and screenshots (editable in the review step), and the Spend tab shows this month's grocery total plus past months at a glance. History sticks around even after items are used up.
 - **🗑️ Toss alerts** — expired items are flagged with a header chip; tap it for a one-screen "time to toss" list you can clear in one tap.
 - **✏️ Manual add & edit** — typing a name (e.g. "yogurt") auto-suggests location and expiry. Tap any item to edit it, mark it **✓ Used**, or **🗑️ Toss** it.
 - **📱 Installable PWA** — add it to your phone's home screen and it works like an app, including offline (after the first scan the OCR engine is cached too).
@@ -35,10 +36,10 @@ Netlify, Cloudflare Pages, Vercel, etc. also work — just point them at the rep
 
 ## How receipt scanning works
 
-1. Tap **＋ → Scan a receipt** and photograph the receipt (flat, well-lit, straight-on works best).
-2. OCR runs on-device; lines with prices are treated as candidate items, while totals, tax, and payment lines are filtered out.
-3. Each item is matched against the shelf-life database ([`js/foodData.js`](js/foodData.js)) to guess where it lives and how long it lasts.
-4. You review the list — uncheck non-food items, fix names, adjust dates — then save.
+1. Tap **＋**, then either **📷 Snap a paper receipt** (flat, well-lit, straight-on works best) or **🖼️ Upload a screenshot or photo** — e.g. a screenshot of your Walmart or Instacart order.
+2. OCR runs on-device; lines with prices are treated as candidate items (both receipt-style `MILK  3.48` lines and order-app layouts where the price sits under the product name), while totals, tax, fees, tips, and payment lines are filtered out.
+3. Each item is matched against the shelf-life database ([`js/foodData.js`](js/foodData.js)) to guess where it lives and how long it lasts; its price feeds the Spend tab.
+4. You review the list — uncheck non-food items, fix names, spots, dates, and prices — then save.
 
 OCR on crumpled receipts is imperfect, so the review step is always shown. Anything it misses can be added with **＋ Add a missed item** on the same screen.
 
