@@ -1,6 +1,7 @@
 import { loadItems, saveItems, loadPurchases, savePurchases, newId } from './store.js';
 import { parseReceiptText, guessFood } from './parser.js';
 import { recognizeReceipt } from './ocr.js';
+import { BUILD_BRANCH, BUILD_SHA, BUILD_TIME } from './version.js';
 
 const LOCATIONS = {
   fridge: { label: 'Fridge', emoji: '🧊', empty: 'Your fridge is empty!' },
@@ -9,6 +10,9 @@ const LOCATIONS = {
 };
 
 const SOON_DAYS = 3;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const REPO = 'ryleyp/grocery-tracker';
+const GITHUB_MAIN_COMMIT = `https://api.github.com/repos/${REPO}/commits/main`;
 
 let items = loadItems();
 let purchases = loadPurchases();
@@ -28,6 +32,22 @@ function addDays(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function validDate(date) {
+  return DATE_RE.test(date || '');
+}
+
+function purchaseDate(item) {
+  if (validDate(item.purchasedAt)) return item.purchasedAt;
+  if (validDate(item.addedAt)) return item.addedAt;
+  return todayStr();
+}
+
+function shortDate(date) {
+  if (!validDate(date)) return '';
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function daysLeft(expiresAt) {
@@ -67,8 +87,8 @@ function fmtMoney(n) {
 function syncPurchase(item) {
   const idx = purchases.findIndex((p) => p.id === item.id);
   if (item.price > 0) {
-    const entry = { id: item.id, date: item.addedAt || todayStr(), name: item.name, price: item.price };
-    if (idx >= 0) purchases[idx] = { ...purchases[idx], name: item.name, price: item.price };
+    const entry = { id: item.id, date: purchaseDate(item), name: item.name, price: item.price };
+    if (idx >= 0) purchases[idx] = { ...purchases[idx], ...entry };
     else purchases.push(entry);
   } else if (idx >= 0) {
     purchases.splice(idx, 1);
@@ -196,7 +216,7 @@ function itemCard(item, { tossOnly = false } = {}) {
   exp.className = `item-expiry ${status}`;
   exp.textContent = tossOnly
     ? `${LOCATIONS[item.location].emoji} ${LOCATIONS[item.location].label} · ${expiryText(item)}`
-    : expiryText(item) + (item.price > 0 ? ` · ${fmtMoney(item.price)}` : '');
+    : expiryText(item) + (item.price > 0 ? ` · ${fmtMoney(item.price)} · bought ${shortDate(purchaseDate(item))}` : '');
   main.append(name, exp);
   if (!tossOnly) main.addEventListener('click', () => openEdit(item.id));
 
@@ -224,6 +244,7 @@ function openEdit(id) {
   $('edit-name').value = item ? item.name : '';
   $('edit-location').value = item ? item.location : (currentTab === 'spend' ? 'pantry' : currentTab);
   $('edit-expires').value = item ? item.expiresAt : addDays(7);
+  $('edit-purchased').value = item ? purchaseDate(item) : todayStr();
   $('edit-price').value = item && item.price > 0 ? item.price.toFixed(2) : '';
   $('btn-edit-delete').classList.toggle('hidden', !item);
   $('edit-backdrop').classList.remove('hidden');
@@ -243,15 +264,16 @@ $('btn-edit-save').addEventListener('click', () => {
   }
   const location = $('edit-location').value;
   const expiresAt = $('edit-expires').value || addDays(7);
+  const purchasedAt = $('edit-purchased').value || todayStr();
   const priceVal = parseFloat($('edit-price').value);
   const price = Number.isFinite(priceVal) && priceVal > 0 ? Math.round(priceVal * 100) / 100 : null;
 
   let item;
   if (editingId) {
     item = items.find((i) => i.id === editingId);
-    Object.assign(item, { name, location, expiresAt, price });
+    Object.assign(item, { name, location, expiresAt, purchasedAt, price });
   } else {
-    item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), price };
+    item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price };
     items.push(item);
   }
   syncPurchase(item);
@@ -304,11 +326,101 @@ $('btn-upload').addEventListener('click', () => {
   $('upload-input').click();
 });
 
+// ---------- GitHub update check ----------
+
+function shortSha(sha) {
+  return sha ? sha.slice(0, 7) : '';
+}
+
+function showUpdateStatus(title, message, canRefresh = false) {
+  $('update-title').textContent = title;
+  $('update-message').textContent = message;
+  const refreshBtn = $('btn-update-refresh');
+  refreshBtn.classList.toggle('hidden', !canRefresh);
+  refreshBtn.disabled = !canRefresh;
+  $('update-backdrop').classList.remove('hidden');
+}
+
+async function clearAppCaches() {
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key.startsWith('grocery-tracker-')).map((key) => caches.delete(key)));
+  }
+  if ('serviceWorker' in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((reg) => reg.update().catch(() => {})));
+  }
+}
+
+$('btn-update').addEventListener('click', async () => {
+  const btn = $('btn-update');
+  btn.disabled = true;
+  btn.textContent = '…';
+  showUpdateStatus('Checking for updates', 'Looking at GitHub for the newest version.');
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      await reg?.update();
+    }
+
+    const res = await fetch(GITHUB_MAIN_COMMIT, {
+      cache: 'no-store',
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error('GitHub did not return an update status.');
+    const latest = await res.json();
+    const latestSha = latest.sha || '';
+
+    if (BUILD_SHA && BUILD_SHA !== 'dev' && latestSha && latestSha !== BUILD_SHA) {
+      showUpdateStatus(
+        'Update available',
+        `GitHub has ${shortSha(latestSha)}. This app is running ${shortSha(BUILD_SHA)}. Refresh to load the newest version.`,
+        true
+      );
+    } else if (BUILD_SHA === 'dev') {
+      showUpdateStatus(
+        'GitHub is reachable',
+        `Latest on GitHub is ${shortSha(latestSha)}. This local copy does not have deployed version metadata.`
+      );
+    } else {
+      const built = BUILD_TIME ? ` Built ${shortDate(BUILD_TIME.slice(0, 10))}.` : '';
+      showUpdateStatus('You are up to date', `Running ${shortSha(BUILD_SHA)} from ${BUILD_BRANCH || 'main'}.${built}`);
+    }
+  } catch (err) {
+    showUpdateStatus('Could not check GitHub', err.message || 'Try again when you have a connection.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↻';
+  }
+});
+
+$('btn-update-close').addEventListener('click', () => $('update-backdrop').classList.add('hidden'));
+
+$('btn-update-refresh').addEventListener('click', async () => {
+  $('btn-update-refresh').disabled = true;
+  showUpdateStatus('Refreshing app', 'Clearing the saved app shell so the newest files load from GitHub Pages.');
+  await clearAppCaches();
+  window.location.reload();
+});
+
 // ---------- scan & review ----------
 
-async function handleScanFile(e) {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
+function mergeParsedItems(parsed) {
+  const out = [];
+  const seen = new Set();
+  for (const item of parsed) {
+    const key = `${item.name.toLowerCase()}|${item.price || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+async function handleScanFiles(e) {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
 
   $('scan-backdrop').classList.remove('hidden');
   $('scan-progress').classList.remove('hidden');
@@ -317,23 +429,45 @@ async function handleScanFile(e) {
   $('progress-bar').style.width = '0%';
   $('scan-status').textContent = 'Reading your receipt…';
 
-  try {
-    const text = await recognizeReceipt(file, (p) => {
-      $('progress-bar').style.width = `${Math.round(p * 100)}%`;
-    });
-    const parsed = parseReceiptText(text);
-    if (!parsed.length) {
-      showScanError("We couldn't find any items on that image. Try a clearer, well-lit shot — or add items manually.");
-      return;
+  const parsed = [];
+  const failed = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    $('scan-status').textContent = files.length === 1
+      ? 'Reading your receipt…'
+      : `Reading image ${i + 1} of ${files.length}…`;
+    try {
+      const text = await recognizeReceipt(file, (p) => {
+        const overall = ((i + p) / files.length) * 100;
+        $('progress-bar').style.width = `${Math.round(overall)}%`;
+      });
+      parsed.push(...parseReceiptText(text));
+      $('progress-bar').style.width = `${Math.round(((i + 1) / files.length) * 100)}%`;
+    } catch (err) {
+      failed.push(file.name || `image ${i + 1}`);
     }
-    showReview(parsed);
-  } catch (err) {
-    showScanError(err.message || 'Something went wrong while reading the image.');
   }
+
+  const merged = mergeParsedItems(parsed);
+  if (!merged.length) {
+    const msg = failed.length
+      ? "We couldn't read enough text from those images. Try brighter screenshots, crop to the receipt/order list, or add items manually."
+      : files.length > 1
+        ? "We couldn't find any items in those images. Try brighter screenshots, crop to the receipt/order list, or add items manually."
+        : "We couldn't find any items on that image. Try a clearer, well-lit shot — or add items manually.";
+    showScanError(msg);
+    return;
+  }
+
+  const note = files.length > 1
+    ? `Found ${merged.length} possible item${merged.length === 1 ? '' : 's'} across ${files.length} image${files.length === 1 ? '' : 's'}. Fix anything that looks off before saving${failed.length ? `; ${failed.length} image${failed.length === 1 ? '' : 's'} could not be read.` : '.'}`
+    : 'Uncheck anything that is not food. Fix names, spots, dates, and prices as needed.';
+  showReview(merged, note);
 }
 
-$('receipt-input').addEventListener('change', handleScanFile);
-$('upload-input').addEventListener('change', handleScanFile);
+$('receipt-input').addEventListener('change', handleScanFiles);
+$('upload-input').addEventListener('change', handleScanFiles);
 
 function showScanError(msg) {
   $('scan-progress').classList.add('hidden');
@@ -346,7 +480,7 @@ function closeScan() {
   $('scan-backdrop').classList.add('hidden');
 }
 
-function reviewRow({ name = '', location = 'pantry', days = 7, price = null, checked = true } = {}) {
+function reviewRow({ name = '', location = 'pantry', days = 7, price = null, purchasedAt = todayStr(), checked = true } = {}) {
   const li = document.createElement('li');
   li.className = 'review-row';
 
@@ -373,9 +507,17 @@ function reviewRow({ name = '', location = 'pantry', days = 7, price = null, che
   }
   sel.value = location;
 
-  const date = document.createElement('input');
-  date.type = 'date';
-  date.value = addDays(days);
+  const expiresInput = document.createElement('input');
+  expiresInput.type = 'date';
+  expiresInput.className = 'review-expires';
+  expiresInput.setAttribute('aria-label', 'Use or toss by');
+  expiresInput.value = addDays(days);
+
+  const purchasedInput = document.createElement('input');
+  purchasedInput.type = 'date';
+  purchasedInput.className = 'review-purchased';
+  purchasedInput.setAttribute('aria-label', 'Bought on');
+  purchasedInput.value = validDate(purchasedAt) ? purchasedAt : todayStr();
 
   const priceInput = document.createElement('input');
   priceInput.type = 'number';
@@ -384,6 +526,7 @@ function reviewRow({ name = '', location = 'pantry', days = 7, price = null, che
   priceInput.inputMode = 'decimal';
   priceInput.placeholder = '$';
   priceInput.className = 'review-price';
+  priceInput.setAttribute('aria-label', 'Price');
   if (price > 0) priceInput.value = price.toFixed(2);
 
   // Re-guess when the user corrects an OCR'd name
@@ -391,19 +534,20 @@ function reviewRow({ name = '', location = 'pantry', days = 7, price = null, che
     const guess = guessFood(nameInput.value);
     if (guess.matched) {
       sel.value = guess.location;
-      date.value = addDays(guess.days);
+      expiresInput.value = addDays(guess.days);
     }
   });
 
-  meta.append(sel, date, priceInput);
+  meta.append(sel, expiresInput, purchasedInput, priceInput);
   li.append(cb, nameInput, meta);
   return li;
 }
 
-function showReview(parsed) {
+function showReview(parsed, note = 'Uncheck anything that is not food. Fix names, spots, dates, and prices as needed.') {
   const ul = $('review-list');
   ul.innerHTML = '';
   for (const p of parsed) ul.appendChild(reviewRow(p));
+  $('scan-review-note').textContent = note;
   $('scan-progress').classList.add('hidden');
   $('scan-review').classList.remove('hidden');
 }
@@ -427,10 +571,11 @@ $('btn-review-save').addEventListener('click', () => {
     const name = row.querySelector('.review-name').value.trim();
     if (!name) continue;
     const location = row.querySelector('select').value;
-    const expiresAt = row.querySelector('input[type="date"]').value || addDays(7);
+    const expiresAt = row.querySelector('.review-expires').value || addDays(7);
+    const purchasedAt = row.querySelector('.review-purchased').value || todayStr();
     const priceVal = parseFloat(row.querySelector('.review-price').value);
     const price = Number.isFinite(priceVal) && priceVal > 0 ? Math.round(priceVal * 100) / 100 : null;
-    const item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), price };
+    const item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price };
     items.push(item);
     syncPurchase(item);
     added++;
@@ -499,20 +644,20 @@ $('btn-import').addEventListener('click', () => {
   $('import-input').click();
 });
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 function sanitizeItems(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const r of raw) {
     if (!r || typeof r.name !== 'string' || !r.name.trim()) continue;
     const price = Number(r.price);
+    const addedAt = validDate(r.addedAt) ? r.addedAt : todayStr();
     out.push({
       id: typeof r.id === 'string' && r.id ? r.id : newId(),
       name: r.name.trim().slice(0, 80),
       location: Object.hasOwn(LOCATIONS, r.location) ? r.location : 'pantry',
-      expiresAt: DATE_RE.test(r.expiresAt || '') ? r.expiresAt : addDays(7),
-      addedAt: DATE_RE.test(r.addedAt || '') ? r.addedAt : todayStr(),
+      expiresAt: validDate(r.expiresAt) ? r.expiresAt : addDays(7),
+      addedAt,
+      purchasedAt: validDate(r.purchasedAt) ? r.purchasedAt : addedAt,
       price: Number.isFinite(price) && price > 0 ? Math.round(price * 100) / 100 : null,
     });
   }
@@ -528,7 +673,7 @@ function sanitizePurchases(raw) {
     if (!Number.isFinite(price) || price <= 0) continue;
     out.push({
       id: typeof r.id === 'string' && r.id ? r.id : newId(),
-      date: DATE_RE.test(r.date || '') ? r.date : todayStr(),
+      date: validDate(r.date) ? r.date : todayStr(),
       name: r.name.trim().slice(0, 80),
       price: Math.round(price * 100) / 100,
     });
@@ -611,7 +756,7 @@ document.querySelectorAll('.tab').forEach((tab) =>
 );
 
 // Close modals when tapping the dimmed backdrop
-for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop']) {
+for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop', 'update-backdrop']) {
   $(id).addEventListener('click', (e) => {
     if (e.target === e.currentTarget && id !== 'scan-backdrop') e.currentTarget.classList.add('hidden');
   });

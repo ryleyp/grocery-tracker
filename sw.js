@@ -1,4 +1,4 @@
-const CACHE = 'grocery-tracker-v5';
+const CACHE = 'grocery-tracker-v6';
 
 const APP_SHELL = [
   '.',
@@ -9,6 +9,7 @@ const APP_SHELL = [
   'js/parser.js',
   'js/foodData.js',
   'js/ocr.js',
+  'js/version.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -27,7 +28,7 @@ self.addEventListener('activate', (e) => {
 });
 
 // Cache-first for everything we've seen; cache successful GETs at runtime
-// (this also caches the Tesseract CDN files after the first scan).
+// (this also caches the vendored Tesseract files after the first scan).
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(

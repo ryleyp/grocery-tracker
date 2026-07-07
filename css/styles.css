@@ -80,13 +80,18 @@ html, body {
   border-radius: 50%;
   width: 38px;
   height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1.1rem;
   background: rgba(255, 255, 255, 0.22);
+  color: #fff;
   cursor: pointer;
   transition: transform 0.12s;
 }
 
 .icon-btn:active { transform: scale(0.9); }
+.icon-btn:disabled { opacity: 0.6; cursor: wait; }
 
 .sheet-title {
   margin: 2px 4px 0;
@@ -606,16 +611,15 @@ main {
 
 .review-meta {
   grid-column: 2;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 72px;
   gap: 8px;
 }
 
 .review-meta { min-width: 0; }
-.review-meta .review-price { flex: 0 0 68px; }
 
 .review-meta select,
 .review-meta input {
-  flex: 1;
   min-width: 0;
   padding: 9px;
   font-size: 0.85rem;
@@ -624,4 +628,14 @@ main {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+
+@media (max-width: 430px) {
+  .review-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .modal-actions {
+    flex-wrap: wrap;
+  }
 }

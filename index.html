@@ -17,6 +17,7 @@
     <h1>🥕 Grocery Tracker</h1>
     <div class="header-actions">
       <button id="alert-chip" class="alert-chip hidden" type="button"></button>
+      <button id="btn-update" class="icon-btn" type="button" aria-label="Check for updates">↻</button>
       <button id="btn-backup" class="icon-btn" type="button" aria-label="Backup">💾</button>
     </div>
   </header>
@@ -62,13 +63,25 @@
   <div id="sheet-backdrop" class="backdrop hidden">
     <div class="sheet" role="dialog" aria-label="Add items">
       <button id="btn-scan" class="sheet-btn" type="button">📷 Snap a paper receipt</button>
-      <button id="btn-upload" class="sheet-btn" type="button">🖼️ Upload a screenshot or photo</button>
+      <button id="btn-upload" class="sheet-btn" type="button">🖼️ Upload screenshots or photos</button>
       <button id="btn-manual" class="sheet-btn" type="button">✏️ Add item manually</button>
       <button id="btn-sheet-cancel" class="sheet-btn cancel" type="button">Cancel</button>
     </div>
   </div>
   <input id="receipt-input" type="file" accept="image/*" capture="environment" hidden>
-  <input id="upload-input" type="file" accept="image/*" hidden>
+  <input id="upload-input" type="file" accept="image/*" multiple hidden>
+
+  <!-- Update check modal -->
+  <div id="update-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="App update">
+      <h2 id="update-title">Checking for updates</h2>
+      <p id="update-message" class="muted small"></p>
+      <div class="modal-actions">
+        <button id="btn-update-close" class="btn ghost" type="button">Close</button>
+        <button id="btn-update-refresh" class="btn primary hidden" type="button">Refresh app</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Backup sheet -->
   <div id="backup-backdrop" class="backdrop hidden">
@@ -105,7 +118,7 @@
       </div>
       <div id="scan-review" class="hidden">
         <h2>Found on your receipt</h2>
-        <p class="muted small">Uncheck anything that isn't food. Fix names, spots, and expiry dates as needed.</p>
+        <p id="scan-review-note" class="muted small">Uncheck anything that isn't food. Fix names, spots, dates, and prices as needed.</p>
         <ul id="review-list" class="review-list"></ul>
         <button id="btn-review-add-row" class="link-btn" type="button">＋ Add a missed item</button>
         <div class="modal-actions">
@@ -140,6 +153,9 @@
       </label>
       <label class="field">Use or toss by
         <input id="edit-expires" type="date">
+      </label>
+      <label class="field">Bought on
+        <input id="edit-purchased" type="date">
       </label>
       <label class="field">What it cost (optional)
         <input id="edit-price" type="number" inputmode="decimal" step="0.01" min="0" placeholder="$0.00">

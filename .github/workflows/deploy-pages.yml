@@ -22,6 +22,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Write version metadata
+        run: |
+          node -e 'const fs = require("fs"); const lines = [["BUILD_SHA", process.env.GITHUB_SHA], ["BUILD_BRANCH", process.env.GITHUB_REF_NAME], ["BUILD_TIME", new Date().toISOString()]].map(([key, value]) => `export const ${key} = ${JSON.stringify(value || "")};`); fs.writeFileSync("js/version.js", lines.join("\n") + "\n");'
       - uses: actions/configure-pages@v5
         with:
           enablement: true
