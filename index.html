@@ -28,11 +28,48 @@
         <h2 id="section-title">Fridge</h2>
         <span id="section-count" class="count-pill"></span>
       </div>
+      <div class="controls">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input id="search-input" type="search" placeholder="Search all groceries…" autocomplete="off" enterkeyhint="search">
+          <button id="search-clear" class="search-clear hidden" type="button" aria-label="Clear search">✕</button>
+        </div>
+        <div class="controls-row">
+          <div class="filter-chips" id="filter-chips">
+            <button class="chip active" data-filter="all" type="button">All</button>
+            <button class="chip" data-filter="soon" type="button">⏰ Soon</button>
+            <button class="chip" data-filter="fresh" type="button">Fresh</button>
+          </div>
+          <select id="sort-select" class="sort-select" aria-label="Sort items">
+            <option value="expiry">Soonest expiry</option>
+            <option value="name">Name A–Z</option>
+            <option value="added">Recently added</option>
+            <option value="price">Priciest</option>
+          </select>
+        </div>
+      </div>
       <ul id="item-list" class="item-list"></ul>
       <div id="empty-state" class="empty-state hidden">
         <p class="empty-emoji" id="empty-emoji">🧊</p>
         <p id="empty-text">Nothing in here yet.</p>
         <p class="muted">Tap <strong>＋</strong> to scan a receipt or add items 🧾</p>
+      </div>
+    </section>
+
+    <section id="calendar" class="hidden">
+      <div class="cal-header">
+        <button id="cal-prev" class="icon-btn cal-nav" type="button" aria-label="Previous month">‹</button>
+        <h2 id="cal-month-label">July 2026</h2>
+        <button id="cal-next" class="icon-btn cal-nav" type="button" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-weekdays">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <div class="cal-legend">
+        <span><i class="cal-dot ok"></i> fine</span>
+        <span><i class="cal-dot soon"></i> soon</span>
+        <span><i class="cal-dot expired"></i> expired</span>
       </div>
     </section>
 
@@ -45,8 +82,42 @@
         <p class="spend-amount" id="spend-amount">$0.00</p>
         <p class="spend-sub" id="spend-sub"></p>
       </div>
+      <div class="waste-cards">
+        <div class="waste-card used">
+          <p class="waste-emoji">🍽️</p>
+          <p class="waste-amount" id="used-amount">$0.00</p>
+          <p class="waste-label" id="used-label">used up</p>
+        </div>
+        <div class="waste-card wasted">
+          <p class="waste-emoji">🗑️</p>
+          <p class="waste-amount" id="wasted-amount">$0.00</p>
+          <p class="waste-label" id="wasted-label">wasted</p>
+        </div>
+      </div>
       <ul id="month-list" class="month-list"></ul>
-      <p class="muted small">Totals come from item prices captured off your receipts and screenshots — you can fix any price while reviewing a scan or editing an item.</p>
+      <p class="muted small">Totals come from item prices captured off your receipts and screenshots — you can fix any price while reviewing a scan or editing an item. “Used up” vs “wasted” comes from how you clear items — swipe or tap ✓ Used, or 🗑️ Toss.</p>
+    </section>
+
+    <section id="shopping" class="hidden">
+      <div class="section-head">
+        <h2>🛒 Shopping list</h2>
+        <span id="shopping-count" class="count-pill"></span>
+      </div>
+      <form id="shopping-add" class="shopping-add">
+        <input id="shopping-input" type="text" placeholder="Add something to buy…" autocomplete="off" enterkeyhint="done">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <div id="shopping-suggest" class="shopping-suggest hidden">
+        <p class="suggest-label">Recently ran out — tap to re-add:</p>
+        <div id="suggest-chips" class="suggest-chips"></div>
+      </div>
+      <ul id="shopping-list" class="shopping-items"></ul>
+      <div id="shopping-empty" class="empty-state hidden">
+        <p class="empty-emoji">🛒</p>
+        <p>Your shopping list is empty.</p>
+        <p class="muted">Add items above, or re-add things you've used up.</p>
+      </div>
+      <button id="btn-clear-done" class="link-btn hidden" type="button">Clear checked-off items</button>
     </section>
   </main>
 
@@ -56,6 +127,8 @@
     <button class="tab active" data-tab="fridge" type="button"><span class="tab-icon">🧊</span>Fridge<span class="tab-badge hidden" data-badge="fridge"></span></button>
     <button class="tab" data-tab="freezer" type="button"><span class="tab-icon">❄️</span>Freezer<span class="tab-badge hidden" data-badge="freezer"></span></button>
     <button class="tab" data-tab="pantry" type="button"><span class="tab-icon">🥫</span>Pantry<span class="tab-badge hidden" data-badge="pantry"></span></button>
+    <button class="tab" data-tab="shopping" type="button"><span class="tab-icon">🛒</span>List<span class="tab-badge hidden" data-badge="shopping"></span></button>
+    <button class="tab" data-tab="calendar" type="button"><span class="tab-icon">📅</span>Calendar</button>
     <button class="tab" data-tab="spend" type="button"><span class="tab-icon">💸</span>Spend</button>
   </nav>
 
@@ -64,6 +137,7 @@
     <div class="sheet" role="dialog" aria-label="Add items">
       <button id="btn-scan" class="sheet-btn" type="button">📷 Scan a receipt or order</button>
       <button id="btn-upload" class="sheet-btn" type="button">🖼️ Import receipt/order screenshots</button>
+      <button id="btn-barcode" class="sheet-btn hidden" type="button">📸 Scan a barcode</button>
       <button id="btn-manual" class="sheet-btn" type="button">✏️ Add item manually</button>
       <button id="btn-sheet-cancel" class="sheet-btn cancel" type="button">Cancel</button>
     </div>
@@ -157,6 +231,9 @@
       <label class="field">Use or toss by
         <input id="edit-expires" type="date">
       </label>
+      <label class="field">How many
+        <input id="edit-qty" type="number" inputmode="numeric" step="1" min="1" value="1">
+      </label>
       <label class="field">Bought on
         <input id="edit-purchased" type="date">
       </label>
@@ -182,6 +259,39 @@
         <button id="btn-toss-all" class="btn danger" type="button">Tossed them all</button>
       </div>
     </div>
+  </div>
+
+  <!-- Calendar day detail -->
+  <div id="day-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Items expiring this day">
+      <h2 id="day-title">Items</h2>
+      <ul id="day-list" class="item-list"></ul>
+      <div class="modal-actions">
+        <button id="btn-day-close" class="btn ghost" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barcode scan modal -->
+  <div id="barcode-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Scan a barcode">
+      <h2>📸 Scan a barcode</h2>
+      <p id="barcode-status" class="muted small">Point your camera at the barcode.</p>
+      <div class="barcode-video-wrap">
+        <video id="barcode-video" playsinline muted></video>
+        <div class="barcode-reticle"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-barcode-cancel" class="btn ghost" type="button">Cancel</button>
+        <button id="btn-barcode-manual" class="btn primary" type="button">Type it instead</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Undo toast -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite">
+    <span id="toast-msg"></span>
+    <button id="toast-undo" class="toast-undo" type="button">Undo</button>
   </div>
 
   <script type="module" src="js/app.js"></script>

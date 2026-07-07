@@ -5,9 +5,14 @@ A mobile-first web app for keeping track of what groceries you have and when to 
 ## Features
 
 - **📷 Receipt & screenshot scanning** — snap a paper receipt with your phone camera, or upload a screenshot of a mobile order (Walmart, Instacart, etc.). Text is read on-device with [Tesseract.js](https://tesseract.projectnaptha.com/) OCR (vendored in this repo), so your receipts never leave your phone.
+- **📸 Barcode scanning** — on supported phones, scan a product's barcode to look it up by name and auto-sort it (uses the device's built-in `BarcodeDetector` + [Open Food Facts](https://world.openfoodfacts.org/)).
 - **🧠 Smart guesses** — a built-in shelf-life database of 100+ common foods (including receipt abbreviations like `BNLS CHKN BRST` and `GRND BF`) auto-assigns each item a location and a "use or toss by" date. You review and fix anything before saving.
 - **🗂️ Fridge / Freezer / Pantry tabs** — each with counts and red badges for expired items.
-- **💸 Monthly spending** — prices are captured off receipts and screenshots (editable in the review step), and the Spend tab shows this month's grocery total plus past months at a glance. History sticks around even after items are used up.
+- **👆 Swipe, sort, search** — swipe an item **right to mark one used**, **left to toss** it (with an **Undo** toast). Search across every location ("do I already have ketchup?"), filter by ⏰ Soon / Fresh, and sort by expiry, name, recency, or price.
+- **🔢 Quantities** — track how many you have (e.g. ×12 eggs); marking one used counts it down until the last is gone.
+- **🛒 Shopping list** — a dedicated tab to jot what to buy, check items off, and one-tap re-add things you've recently run out of.
+- **📅 Calendar view** — a monthly grid with a dot on every day something expires (blue = fine, coral = soon, red = expired). Tap a day to see what's due and jump straight to editing or tossing it.
+- **💸 Spending & waste** — prices captured off receipts feed the Spend tab: this month's total, past months, and a **used-up vs. wasted** breakdown so you can see how much food (and money) is going in the bin.
 - **🗑️ Toss alerts** — expired items are flagged with a header chip; tap it for a one-screen "time to toss" list you can clear in one tap.
 - **✏️ Manual add & edit** — typing a name (e.g. "yogurt") auto-suggests location and expiry. Tap any item to edit it, mark it **✓ Used**, or **🗑️ Toss** it.
 - **📱 Installable PWA** — add it to your phone's home screen and it works like an app, including offline (after the first scan the OCR engine is cached too).

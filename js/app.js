@@ -1,7 +1,10 @@
-import { loadItems, saveItems, loadPurchases, savePurchases, newId } from './store.js';
+import {
+  loadItems, saveItems, loadPurchases, savePurchases,
+  loadUsage, saveUsage, loadShopping, saveShopping, newId,
+} from './store.js';
 import { parseReceiptText, guessFood } from './parser.js';
 import { recognizeReceipt } from './ocr.js';
-import { applyProductInfo, enrichItemsWithProductInfo, lookupProductInfo, productInfoLabel } from './productInfo.js';
+import { applyProductInfo, enrichItemsWithProductInfo, lookupProductInfo, lookupProductByBarcode, productInfoLabel } from './productInfo.js';
 import { BUILD_BRANCH, BUILD_SHA, BUILD_TIME } from './version.js';
 
 const LOCATIONS = {
@@ -18,11 +21,28 @@ const REFRESH_SNAPSHOT_KEY = 'grocery-tracker-refresh-snapshot-v1';
 
 let items = loadItems();
 let purchases = loadPurchases();
+let usage = loadUsage();
+let shopping = loadShopping();
 let currentTab = 'fridge';
 let editingId = null; // null = adding new
 let editingProductInfo = null;
+let calendarMonthOffset = 0; // months relative to the current month
+let searchQuery = '';
+let sortMode = 'expiry';
+let filterMode = 'all';
 
 const $ = (id) => document.getElementById(id);
+
+// ---------- small helpers ----------
+
+function buzz(ms = 12) {
+  try { navigator.vibrate?.(ms); } catch {}
+}
+
+function itemQty(item) {
+  const n = Number(item.qty);
+  return Number.isFinite(n) && n >= 1 ? Math.round(n) : 1;
+}
 
 // ---------- date helpers ----------
 
@@ -143,30 +163,69 @@ function persist() {
   saveItems(items);
 }
 
+const SPECIAL_TABS = new Set(['spend', 'calendar', 'shopping']);
+
+function sortItems(list) {
+  const copy = [...list];
+  if (sortMode === 'name') {
+    copy.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortMode === 'added') {
+    copy.sort((a, b) => purchaseDate(b).localeCompare(purchaseDate(a)) || a.name.localeCompare(b.name));
+  } else if (sortMode === 'price') {
+    copy.sort((a, b) => (b.price || 0) - (a.price || 0) || a.name.localeCompare(b.name));
+  } else {
+    copy.sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.name.localeCompare(b.name));
+  }
+  return copy;
+}
+
+function inventoryList() {
+  const q = searchQuery.trim().toLowerCase();
+  // When searching, look across every location so you can answer
+  // "do I already have this?" before buying it.
+  let list = q
+    ? items.filter((i) => i.name.toLowerCase().includes(q))
+    : items.filter((i) => i.location === currentTab);
+
+  if (filterMode === 'soon') {
+    list = list.filter((i) => expiryStatus(i) !== 'ok');
+  } else if (filterMode === 'fresh') {
+    list = list.filter((i) => expiryStatus(i) === 'ok');
+  }
+  return sortItems(list);
+}
+
 function render() {
   const isSpend = currentTab === 'spend';
-  $('inventory').classList.toggle('hidden', isSpend);
+  const isCalendar = currentTab === 'calendar';
+  const isShopping = currentTab === 'shopping';
+  const isInventory = !SPECIAL_TABS.has(currentTab);
+  $('inventory').classList.toggle('hidden', !isInventory);
   $('spend').classList.toggle('hidden', !isSpend);
+  $('calendar').classList.toggle('hidden', !isCalendar);
+  $('shopping').classList.toggle('hidden', !isShopping);
 
   if (isSpend) {
     renderSpend();
+  } else if (isCalendar) {
+    renderCalendar();
+  } else if (isShopping) {
+    renderShopping();
   } else {
     const loc = LOCATIONS[currentTab];
-    $('section-title').textContent = `${loc.emoji} ${loc.label}`;
-    $('empty-emoji').textContent = loc.emoji;
-    $('empty-text').textContent = loc.empty;
+    const searching = Boolean(searchQuery.trim());
+    $('section-title').textContent = searching ? '🔍 Search' : `${loc.emoji} ${loc.label}`;
+    $('empty-emoji').textContent = searching ? '🔍' : loc.emoji;
+    $('empty-text').textContent = searching ? 'No groceries match that.' : loc.empty;
 
-    const list = items
-      .filter((i) => i.location === currentTab)
-      .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.name.localeCompare(b.name));
-
+    const list = inventoryList();
     $('section-count').textContent = list.length ? `${list.length} item${list.length === 1 ? '' : 's'}` : '';
     $('section-count').classList.toggle('hidden', !list.length);
     $('empty-state').classList.toggle('hidden', list.length > 0);
 
     const ul = $('item-list');
     ul.innerHTML = '';
-    for (const item of list) ul.appendChild(itemCard(item));
+    for (const item of list) ul.appendChild(itemCard(item, { swipe: true, showLocation: searching }));
   }
 
   // Per-tab expired badges
@@ -176,6 +235,11 @@ function render() {
     badge.textContent = n;
     badge.classList.toggle('hidden', n === 0);
   }
+
+  const shopBadge = document.querySelector('[data-badge="shopping"]');
+  const openShop = shopping.filter((s) => !s.done).length;
+  shopBadge.textContent = openShop;
+  shopBadge.classList.toggle('hidden', openShop === 0);
 
   // Global toss alert
   const expired = items.filter((i) => expiryStatus(i) === 'expired');
@@ -210,6 +274,26 @@ function renderSpend() {
     ? `${cur.count} item${cur.count === 1 ? '' : 's'} · ${monthLabel(nowKey)}`
     : `Nothing tracked yet in ${monthLabel(nowKey)} — scan a receipt! 🧾`;
 
+  // This-month used-vs-wasted breakdown from the usage log
+  let usedTotal = 0;
+  let wastedTotal = 0;
+  let wastedCount = 0;
+  for (const u of usage) {
+    if ((u.date || '').slice(0, 7) !== nowKey) continue;
+    if (u.outcome === 'wasted') {
+      wastedTotal += u.price || 0;
+      wastedCount++;
+    } else if (u.outcome === 'used') {
+      usedTotal += u.price || 0;
+    }
+  }
+  $('used-amount').textContent = fmtMoney(usedTotal);
+  $('wasted-amount').textContent = fmtMoney(wastedTotal);
+  $('used-label').textContent = 'used up';
+  $('wasted-label').textContent = wastedCount
+    ? `wasted · ${wastedCount} item${wastedCount === 1 ? '' : 's'}`
+    : 'wasted';
+
   const past = [...byMonth.entries()]
     .filter(([k]) => k !== nowKey)
     .sort((a, b) => b[0].localeCompare(a[0]))
@@ -239,10 +323,272 @@ function renderSpend() {
   }
 }
 
-function itemCard(item, { tossOnly = false } = {}) {
-  const li = document.createElement('li');
+function dateKey(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function renderCalendar() {
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth() + calendarMonthOffset, 1);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+
+  $('cal-month-label').textContent = base.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  const byDate = new Map();
+  for (const item of items) {
+    const list = byDate.get(item.expiresAt) || [];
+    list.push(item);
+    byDate.set(item.expiresAt, list);
+  }
+
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = todayStr();
+
+  const grid = $('cal-grid');
+  grid.innerHTML = '';
+
+  for (let i = 0; i < firstWeekday; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'cal-day empty';
+    grid.appendChild(blank);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = dateKey(year, month, d);
+    const dayItems = byDate.get(key) || [];
+
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'cal-day' + (key === todayKey ? ' today' : '');
+
+    const num = document.createElement('span');
+    num.textContent = d;
+    cell.appendChild(num);
+
+    if (dayItems.length) {
+      const statuses = new Set(dayItems.map(expiryStatus));
+      const dots = document.createElement('span');
+      dots.className = 'cal-dots';
+      for (const s of ['expired', 'soon', 'ok']) {
+        if (statuses.has(s)) {
+          const dot = document.createElement('i');
+          dot.className = `cal-dot ${s}`;
+          dots.appendChild(dot);
+        }
+      }
+      cell.appendChild(dots);
+      cell.addEventListener('click', () => openDayModal(key, dayItems));
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+function openDayModal(key, dayItems) {
+  const [y, m, d] = key.split('-').map(Number);
+  $('day-title').textContent = new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  const ul = $('day-list');
+  ul.innerHTML = '';
+  for (const item of dayItems.sort((a, b) => a.name.localeCompare(b.name))) {
+    ul.appendChild(itemCard(item));
+  }
+  $('day-backdrop').classList.remove('hidden');
+}
+
+$('cal-prev').addEventListener('click', () => {
+  calendarMonthOffset--;
+  renderCalendar();
+});
+
+$('cal-next').addEventListener('click', () => {
+  calendarMonthOffset++;
+  renderCalendar();
+});
+
+$('btn-day-close').addEventListener('click', () => $('day-backdrop').classList.add('hidden'));
+
+// ---------- usage log + undo toast ----------
+
+function logUsage(item, outcome, qty = 1) {
+  const entry = {
+    id: newId(),
+    itemId: item.id,
+    date: todayStr(),
+    name: item.name,
+    price: item.price > 0 ? item.price : null,
+    qty,
+    outcome, // 'used' | 'wasted'
+  };
+  usage.push(entry);
+  saveUsage(usage);
+  return entry;
+}
+
+function unlogUsage(entryId) {
+  usage = usage.filter((u) => u.id !== entryId);
+  saveUsage(usage);
+}
+
+let toastTimer = null;
+let pendingUndo = null;
+
+function showToast(message, onUndo) {
+  clearTimeout(toastTimer);
+  $('toast-msg').textContent = message;
+  $('toast-undo').classList.toggle('hidden', !onUndo);
+  pendingUndo = onUndo || null;
+  $('toast').classList.remove('hidden');
+  toastTimer = setTimeout(hideToast, 5000);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  $('toast').classList.add('hidden');
+  pendingUndo = null;
+}
+
+$('toast-undo').addEventListener('click', () => {
+  const fn = pendingUndo;
+  hideToast();
+  if (fn) fn();
+});
+
+// "Used one": decrement quantity; once the last one is gone, remove and log.
+function useItem(item) {
+  const idx = items.findIndex((i) => i.id === item.id);
+  if (idx < 0) return;
+  buzz();
+  const current = items[idx];
+  const q = itemQty(current);
+
+  if (q > 1) {
+    current.qty = q - 1;
+    persist();
+    render();
+    showToast(`Used one ${current.name} · ${q - 1} left`, () => {
+      const it = items.find((i) => i.id === current.id);
+      if (it) it.qty = q;
+      persist();
+      render();
+    });
+    return;
+  }
+
+  const snapshot = { ...current };
+  items.splice(idx, 1);
+  const entry = logUsage(snapshot, 'used', 1);
+  persist();
+  render();
+  showToast(`✓ Used up ${snapshot.name}`, () => {
+    items.splice(Math.min(idx, items.length), 0, snapshot);
+    unlogUsage(entry.id);
+    persist();
+    render();
+  });
+}
+
+// "Toss": remove the item entirely and log it as wasted.
+function tossItem(item, { afterUndo, after } = {}) {
+  const idx = items.findIndex((i) => i.id === item.id);
+  if (idx < 0) return;
+  buzz(18);
+  const snapshot = { ...items[idx] };
+  items.splice(idx, 1);
+  const entry = logUsage(snapshot, 'wasted', itemQty(snapshot));
+  persist();
+  render();
+  after?.();
+  showToast(`🗑️ Tossed ${snapshot.name}`, () => {
+    items.splice(Math.min(idx, items.length), 0, snapshot);
+    unlogUsage(entry.id);
+    persist();
+    render();
+    afterUndo?.();
+  });
+}
+
+// ---------- swipe gesture ----------
+
+const SWIPE_TRIGGER = 88;
+
+function attachSwipe(card, actionEl, item) {
+  let startX = 0;
+  let startY = 0;
+  let dx = 0;
+  let dragging = false;
+  let decided = false;
+
+  card.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest('.icon-action, .item-btn')) return;
+    startX = e.clientX;
+    startY = e.clientY;
+    dx = 0;
+    dragging = true;
+    decided = false;
+    card.classList.remove('snapping');
+  });
+
+  card.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const mx = e.clientX - startX;
+    const my = e.clientY - startY;
+    if (!decided) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      if (Math.abs(my) > Math.abs(mx)) { dragging = false; return; } // vertical scroll
+      decided = true;
+      card.classList.add('dragging');
+      try { card.setPointerCapture(e.pointerId); } catch {}
+    }
+    dx = mx;
+    card.style.transform = `translateX(${dx}px)`;
+    const isUsed = dx > 0;
+    actionEl.className = `swipe-action show ${isUsed ? 'used' : 'toss'}`;
+    actionEl.textContent = isUsed ? '✓ Used' : '🗑️ Toss';
+  });
+
+  function end() {
+    if (!dragging && !decided) return;
+    dragging = false;
+    card.classList.remove('dragging');
+    if (Math.abs(dx) >= SWIPE_TRIGGER) {
+      const used = dx > 0;
+      const row = card.closest('.item-row');
+      card.style.transform = `translateX(${used ? 100 : -100}%)`;
+      if (row) {
+        row.style.maxHeight = `${row.offsetHeight}px`;
+        requestAnimationFrame(() => row.classList.add('swiping-away'));
+      }
+      setTimeout(() => (used ? useItem(item) : tossItem(item)), 180);
+    } else {
+      card.classList.add('snapping');
+      card.style.transform = '';
+      actionEl.className = 'swipe-action';
+    }
+    dx = 0;
+    decided = false;
+  }
+
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
+}
+
+function itemCard(item, { tossOnly = false, swipe = false, showLocation = false } = {}) {
+  const row = document.createElement('li');
   const status = expiryStatus(item);
-  li.className = `item-card ${status}`;
+  row.className = 'item-row';
+
+  const action = document.createElement('div');
+  action.className = 'swipe-action';
+
+  const card = document.createElement('div');
+  card.className = `item-card ${status}`;
 
   const bubble = document.createElement('div');
   bubble.className = 'item-emoji';
@@ -250,35 +596,87 @@ function itemCard(item, { tossOnly = false } = {}) {
 
   const main = document.createElement('div');
   main.className = 'item-main';
-  const name = document.createElement('div');
+
+  const nameRow = document.createElement('div');
+  nameRow.className = 'item-name-row';
+  const name = document.createElement('span');
   name.className = 'item-name';
   name.textContent = item.name;
+  nameRow.appendChild(name);
+  if (itemQty(item) > 1) {
+    const qty = document.createElement('span');
+    qty.className = 'qty-badge';
+    qty.textContent = `×${itemQty(item)}`;
+    nameRow.appendChild(qty);
+  }
+  if (showLocation) {
+    const tag = document.createElement('span');
+    tag.className = 'item-loc-tag';
+    tag.textContent = LOCATIONS[item.location].emoji;
+    tag.title = LOCATIONS[item.location].label;
+    nameRow.appendChild(tag);
+  }
+
   const exp = document.createElement('div');
   exp.className = `item-expiry ${status}`;
   exp.textContent = tossOnly
     ? `${LOCATIONS[item.location].emoji} ${LOCATIONS[item.location].label} · ${expiryText(item)}`
-    : expiryText(item) + (item.price > 0 ? ` · ${fmtMoney(item.price)} · bought ${shortDate(purchaseDate(item))}` : '');
-  main.append(name, exp);
+    : expiryText(item) + (item.price > 0 ? ` · ${fmtMoney(item.price)}` : '');
+  main.append(nameRow, exp);
   if (!tossOnly) main.addEventListener('click', () => openEdit(item.id));
 
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'item-btn' + (status === 'expired' ? ' toss' : '');
-  btn.textContent = tossOnly ? '✓' : status === 'expired' ? '🗑️ Toss' : '✓ Used';
-  btn.addEventListener('click', () => {
-    items = items.filter((i) => i.id !== item.id);
-    persist();
-    render();
-    if (tossOnly) renderTossList();
-  });
+  card.append(bubble, main);
 
-  li.append(bubble, main, btn);
-  return li;
+  if (tossOnly) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'item-btn toss';
+    btn.textContent = '✓';
+    btn.setAttribute('aria-label', 'Confirm tossed');
+    btn.addEventListener('click', () => {
+      buzz(18);
+      const idx = items.findIndex((i) => i.id === item.id);
+      if (idx >= 0) {
+        const snap = { ...items[idx] };
+        items.splice(idx, 1);
+        logUsage(snap, 'wasted', itemQty(snap));
+        persist();
+      }
+      render();
+      renderTossList();
+    });
+    card.appendChild(btn);
+  } else {
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
+
+    const usedBtn = document.createElement('button');
+    usedBtn.type = 'button';
+    usedBtn.className = 'icon-action used';
+    usedBtn.textContent = '✓';
+    usedBtn.setAttribute('aria-label', 'Used');
+    usedBtn.addEventListener('click', () => useItem(item));
+
+    const tossBtn = document.createElement('button');
+    tossBtn.type = 'button';
+    tossBtn.className = 'icon-action toss';
+    tossBtn.textContent = '🗑️';
+    tossBtn.setAttribute('aria-label', 'Toss');
+    tossBtn.addEventListener('click', () => tossItem(item));
+
+    actions.append(usedBtn, tossBtn);
+    card.appendChild(actions);
+  }
+
+  row.append(action, card);
+  if (swipe) attachSwipe(card, action, item);
+  return row;
 }
 
 // ---------- add / edit modal ----------
 
 function openEdit(id) {
+  $('day-backdrop').classList.add('hidden');
   editingId = id || null;
   const item = id ? items.find((i) => i.id === id) : null;
   editingProductInfo = sanitizeProductInfo(item?.productInfo);
@@ -286,6 +684,7 @@ function openEdit(id) {
   $('edit-name').value = item ? item.name : '';
   $('edit-location').value = item ? item.location : (currentTab === 'spend' ? 'pantry' : currentTab);
   $('edit-expires').value = item ? item.expiresAt : addDays(7);
+  $('edit-qty').value = item ? itemQty(item) : 1;
   $('edit-purchased').value = item ? purchaseDate(item) : todayStr();
   $('edit-price').value = item && item.price > 0 ? item.price.toFixed(2) : '';
   $('edit-info-status').textContent = editingProductInfo ? productInfoLabel(editingProductInfo) : '';
@@ -309,15 +708,17 @@ $('btn-edit-save').addEventListener('click', () => {
   const location = $('edit-location').value;
   const expiresAt = $('edit-expires').value || addDays(7);
   const purchasedAt = $('edit-purchased').value || todayStr();
+  const qtyVal = parseInt($('edit-qty').value, 10);
+  const qty = Number.isFinite(qtyVal) && qtyVal >= 1 ? qtyVal : 1;
   const priceVal = parseFloat($('edit-price').value);
   const price = Number.isFinite(priceVal) && priceVal > 0 ? Math.round(priceVal * 100) / 100 : null;
 
   let item;
   if (editingId) {
     item = items.find((i) => i.id === editingId);
-    Object.assign(item, { name, location, expiresAt, purchasedAt, price, productInfo: editingProductInfo });
+    Object.assign(item, { name, location, expiresAt, purchasedAt, qty, price, productInfo: editingProductInfo });
   } else {
-    item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price, productInfo: editingProductInfo };
+    item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, qty, price, productInfo: editingProductInfo };
     items.push(item);
   }
   syncPurchase(item);
@@ -329,10 +730,9 @@ $('btn-edit-save').addEventListener('click', () => {
 
 $('btn-edit-cancel').addEventListener('click', closeEdit);
 $('btn-edit-delete').addEventListener('click', () => {
-  items = items.filter((i) => i.id !== editingId);
-  persist();
+  const item = items.find((i) => i.id === editingId);
   closeEdit();
-  render();
+  if (item) tossItem(item);
 });
 
 // Suggest expiry/location as the user types a new item's name
@@ -444,6 +844,8 @@ function saveRefreshSnapshot() {
       JSON.stringify({
         items,
         purchases,
+        usage,
+        shopping,
         savedAt: new Date().toISOString(),
       })
     );
@@ -469,6 +871,8 @@ function restoreRefreshSnapshotIfNeeded() {
 
   items = snapshot.items;
   purchases = snapshot.purchases;
+  if (Array.isArray(snapshot.usage)) { usage = snapshot.usage; saveUsage(usage); }
+  if (Array.isArray(snapshot.shopping)) { shopping = snapshot.shopping; saveShopping(shopping); }
   persist();
   savePurchases(purchases);
 }
@@ -860,6 +1264,8 @@ $('btn-export').addEventListener('click', () => {
     exportedAt: new Date().toISOString(),
     items,
     purchases,
+    usage,
+    shopping,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -885,6 +1291,7 @@ function sanitizeItems(raw) {
     if (!r || typeof r.name !== 'string' || !r.name.trim()) continue;
     const price = Number(r.price);
     const addedAt = validDate(r.addedAt) ? r.addedAt : todayStr();
+    const qtyNum = Number(r.qty);
     out.push({
       id: typeof r.id === 'string' && r.id ? r.id : newId(),
       name: r.name.trim().slice(0, 80),
@@ -892,6 +1299,7 @@ function sanitizeItems(raw) {
       expiresAt: validDate(r.expiresAt) ? r.expiresAt : addDays(7),
       addedAt,
       purchasedAt: validDate(r.purchasedAt) ? r.purchasedAt : addedAt,
+      qty: Number.isFinite(qtyNum) && qtyNum >= 1 ? Math.round(qtyNum) : 1,
       price: Number.isFinite(price) && price > 0 ? Math.round(price * 100) / 100 : null,
       productInfo: sanitizeProductInfo(r.productInfo),
     });
@@ -916,22 +1324,62 @@ function sanitizePurchases(raw) {
   return out;
 }
 
+function sanitizeUsage(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r.name !== 'string' || !r.name.trim()) continue;
+    if (r.outcome !== 'used' && r.outcome !== 'wasted') continue;
+    const price = Number(r.price);
+    const qtyNum = Number(r.qty);
+    out.push({
+      id: typeof r.id === 'string' && r.id ? r.id : newId(),
+      itemId: typeof r.itemId === 'string' ? r.itemId : '',
+      date: validDate(r.date) ? r.date : todayStr(),
+      name: r.name.trim().slice(0, 80),
+      price: Number.isFinite(price) && price > 0 ? Math.round(price * 100) / 100 : null,
+      qty: Number.isFinite(qtyNum) && qtyNum >= 1 ? Math.round(qtyNum) : 1,
+      outcome: r.outcome,
+    });
+  }
+  return out;
+}
+
+function sanitizeShopping(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r.name !== 'string' || !r.name.trim()) continue;
+    out.push({
+      id: typeof r.id === 'string' && r.id ? r.id : newId(),
+      name: r.name.trim().slice(0, 80),
+      done: Boolean(r.done),
+      addedAt: validDate(r.addedAt) ? r.addedAt : todayStr(),
+    });
+  }
+  return out;
+}
+
 $('import-input').addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
   $('backup-backdrop').classList.add('hidden');
   let imported = [];
   let importedPurchases = [];
+  let importedUsage = [];
+  let importedShopping = [];
   let exportedAt = null;
   try {
     const data = JSON.parse(await file.text());
     exportedAt = typeof data.exportedAt === 'string' ? data.exportedAt.slice(0, 10) : null;
     imported = sanitizeItems(Array.isArray(data) ? data : data.items);
     importedPurchases = sanitizePurchases(Array.isArray(data) ? [] : data.purchases);
+    importedUsage = sanitizeUsage(Array.isArray(data) ? [] : data.usage);
+    importedShopping = sanitizeShopping(Array.isArray(data) ? [] : data.shopping);
   } catch {
     imported = [];
   }
-  if (!imported.length && !importedPurchases.length) {
+  if (!imported.length && !importedPurchases.length && !importedShopping.length) {
     $('import-summary').textContent = "That file doesn't look like a Grocery Tracker backup — no items found in it.";
     $('btn-import-merge').classList.add('hidden');
     $('btn-import-replace').classList.add('hidden');
@@ -943,15 +1391,19 @@ $('import-input').addEventListener('change', async (e) => {
     $('btn-import-merge').classList.remove('hidden');
     $('btn-import-replace').classList.remove('hidden');
   }
-  pendingImport = { items: imported, purchases: importedPurchases };
+  pendingImport = { items: imported, purchases: importedPurchases, usage: importedUsage, shopping: importedShopping };
   $('import-backdrop').classList.remove('hidden');
 });
 
-function finishImport(mergedItems, mergedPurchases) {
-  items = mergedItems;
-  purchases = mergedPurchases;
+function finishImport({ items: nextItems, purchases: nextPurchases, usage: nextUsage, shopping: nextShopping }) {
+  items = nextItems;
+  purchases = nextPurchases;
+  usage = nextUsage;
+  shopping = nextShopping;
   persist();
   savePurchases(purchases);
+  saveUsage(usage);
+  saveShopping(shopping);
   pendingImport = null;
   $('import-backdrop').classList.add('hidden');
   render();
@@ -968,17 +1420,275 @@ $('btn-import-merge').addEventListener('click', () => {
   );
   const havePurchases = new Set(purchases.map((p) => p.id));
   const mergedPurchases = purchases.concat(pendingImport.purchases.filter((p) => !havePurchases.has(p.id)));
-  finishImport(mergedItems, mergedPurchases);
+  const haveUsage = new Set(usage.map((u) => u.id));
+  const mergedUsage = usage.concat(pendingImport.usage.filter((u) => !haveUsage.has(u.id)));
+  const listNames = new Set(shopping.map((s) => s.name.toLowerCase()));
+  const mergedShopping = shopping.concat(
+    pendingImport.shopping.filter((s) => !listNames.has(s.name.toLowerCase()))
+  );
+  finishImport({ items: mergedItems, purchases: mergedPurchases, usage: mergedUsage, shopping: mergedShopping });
 });
 
 $('btn-import-replace').addEventListener('click', () => {
   if (!pendingImport) return;
-  finishImport(pendingImport.items, pendingImport.purchases);
+  finishImport(pendingImport);
 });
 
 $('btn-import-cancel').addEventListener('click', () => {
   pendingImport = null;
   $('import-backdrop').classList.add('hidden');
+});
+
+// ---------- search / filter / sort ----------
+
+$('search-input').addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  $('search-clear').classList.toggle('hidden', !searchQuery);
+  render();
+});
+
+$('search-clear').addEventListener('click', () => {
+  searchQuery = '';
+  $('search-input').value = '';
+  $('search-clear').classList.add('hidden');
+  render();
+  $('search-input').focus();
+});
+
+$('sort-select').addEventListener('change', (e) => {
+  sortMode = e.target.value;
+  render();
+});
+
+document.querySelectorAll('#filter-chips .chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    filterMode = chip.dataset.filter;
+    document.querySelectorAll('#filter-chips .chip').forEach((c) => c.classList.toggle('active', c === chip));
+    render();
+  });
+});
+
+// ---------- shopping list ----------
+
+function shoppingSuggestions() {
+  const haveNames = new Set(items.map((i) => i.name.toLowerCase()));
+  const listNames = new Set(shopping.map((s) => s.name.toLowerCase()));
+  const seen = new Set();
+  const out = [];
+  for (let i = usage.length - 1; i >= 0 && out.length < 8; i--) {
+    const name = usage[i].name;
+    const key = name.toLowerCase();
+    if (seen.has(key) || haveNames.has(key) || listNames.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+function addShoppingItem(name) {
+  const clean = String(name || '').trim().slice(0, 80);
+  if (!clean) return;
+  if (!shopping.some((s) => s.name.toLowerCase() === clean.toLowerCase() && !s.done)) {
+    shopping.push({ id: newId(), name: clean, done: false, addedAt: todayStr() });
+    saveShopping(shopping);
+    buzz();
+  }
+  renderShopping();
+  render();
+}
+
+function shoppingRow(entry) {
+  const li = document.createElement('li');
+  li.className = 'shop-row' + (entry.done ? ' done' : '');
+
+  const check = document.createElement('button');
+  check.type = 'button';
+  check.className = 'shop-check';
+  check.textContent = entry.done ? '✓' : '';
+  check.setAttribute('aria-label', entry.done ? 'Mark not bought' : 'Mark bought');
+  check.addEventListener('click', () => {
+    entry.done = !entry.done;
+    saveShopping(shopping);
+    buzz();
+    renderShopping();
+    render();
+  });
+
+  const name = document.createElement('span');
+  name.className = 'shop-name';
+  name.textContent = entry.name;
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'shop-del';
+  del.textContent = '✕';
+  del.setAttribute('aria-label', 'Remove');
+  del.addEventListener('click', () => {
+    shopping = shopping.filter((s) => s.id !== entry.id);
+    saveShopping(shopping);
+    renderShopping();
+    render();
+  });
+
+  li.append(check, name, del);
+  return li;
+}
+
+function renderShopping() {
+  const open = shopping.filter((s) => !s.done).length;
+  $('shopping-count').textContent = shopping.length ? `${open} to buy` : '';
+  $('shopping-count').classList.toggle('hidden', !shopping.length);
+
+  const ul = $('shopping-list');
+  ul.innerHTML = '';
+  const sorted = [...shopping].sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+  for (const entry of sorted) ul.appendChild(shoppingRow(entry));
+
+  $('shopping-empty').classList.toggle('hidden', shopping.length > 0);
+  $('btn-clear-done').classList.toggle('hidden', !shopping.some((s) => s.done));
+
+  const suggestions = shoppingSuggestions();
+  const chips = $('suggest-chips');
+  chips.innerHTML = '';
+  for (const name of suggestions) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'suggest-chip';
+    b.textContent = `+ ${name}`;
+    b.addEventListener('click', () => addShoppingItem(name));
+    chips.appendChild(b);
+  }
+  $('shopping-suggest').classList.toggle('hidden', suggestions.length === 0);
+}
+
+$('shopping-add').addEventListener('submit', (e) => {
+  e.preventDefault();
+  addShoppingItem($('shopping-input').value);
+  $('shopping-input').value = '';
+  $('shopping-input').focus();
+});
+
+$('btn-clear-done').addEventListener('click', () => {
+  shopping = shopping.filter((s) => !s.done);
+  saveShopping(shopping);
+  renderShopping();
+  render();
+});
+
+// ---------- barcode scanning ----------
+
+let barcodeStream = null;
+let barcodeDetector = null;
+let barcodeRAF = null;
+let barcodeScanning = false;
+
+if ('BarcodeDetector' in window) {
+  $('btn-barcode').classList.remove('hidden');
+}
+
+$('btn-barcode').addEventListener('click', () => {
+  $('sheet-backdrop').classList.add('hidden');
+  startBarcodeScan();
+});
+
+async function startBarcodeScan() {
+  $('barcode-status').textContent = 'Point your camera at the barcode.';
+  $('barcode-backdrop').classList.remove('hidden');
+  try {
+    barcodeDetector = barcodeDetector || new window.BarcodeDetector({
+      formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'],
+    });
+    barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = $('barcode-video');
+    video.srcObject = barcodeStream;
+    await video.play();
+    barcodeScanning = true;
+    scanBarcodeFrame();
+  } catch {
+    $('barcode-status').textContent = 'Could not open the camera. Try “Type it instead”.';
+  }
+}
+
+async function scanBarcodeFrame() {
+  if (!barcodeScanning) return;
+  try {
+    const codes = await barcodeDetector.detect($('barcode-video'));
+    if (codes && codes.length && codes[0].rawValue) {
+      onBarcodeFound(codes[0].rawValue);
+      return;
+    }
+  } catch {}
+  barcodeRAF = requestAnimationFrame(scanBarcodeFrame);
+}
+
+function stopBarcodeScan() {
+  barcodeScanning = false;
+  if (barcodeRAF) cancelAnimationFrame(barcodeRAF);
+  barcodeRAF = null;
+  if (barcodeStream) {
+    barcodeStream.getTracks().forEach((t) => t.stop());
+    barcodeStream = null;
+  }
+  const video = $('barcode-video');
+  if (video) video.srcObject = null;
+}
+
+async function onBarcodeFound(code) {
+  buzz(20);
+  barcodeScanning = false;
+  if (barcodeRAF) cancelAnimationFrame(barcodeRAF);
+  $('barcode-status').textContent = 'Looking up product…';
+
+  let name = '';
+  let info = null;
+  try {
+    const result = await lookupProductByBarcode(code);
+    if (result.productName) name = result.productName;
+    if (result.info) info = sanitizeProductInfo(result.info);
+  } catch {}
+
+  stopBarcodeScan();
+  $('barcode-backdrop').classList.add('hidden');
+  openEdit(null);
+
+  if (name) {
+    $('edit-name').value = name.slice(0, 80);
+    if (info) {
+      editingProductInfo = info;
+      $('edit-info-status').textContent = productInfoLabel(info);
+      if (info.suggestion) {
+        $('edit-location').value = info.suggestion.location;
+        $('edit-expires').value = addDays(info.suggestion.days);
+      }
+    } else {
+      const guess = guessFood(name);
+      if (guess.matched) {
+        $('edit-location').value = guess.location;
+        $('edit-expires').value = addDays(guess.days);
+      }
+    }
+  } else {
+    $('edit-info-status').textContent = `Scanned ${code} — no match found online. Type the name.`;
+    $('edit-name').focus();
+  }
+}
+
+$('btn-barcode-cancel').addEventListener('click', () => {
+  stopBarcodeScan();
+  $('barcode-backdrop').classList.add('hidden');
+});
+
+$('btn-barcode-manual').addEventListener('click', () => {
+  stopBarcodeScan();
+  $('barcode-backdrop').classList.add('hidden');
+  openEdit(null);
+});
+
+$('barcode-backdrop').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    stopBarcodeScan();
+    e.currentTarget.classList.add('hidden');
+  }
 });
 
 // ---------- tabs ----------
@@ -991,7 +1701,7 @@ document.querySelectorAll('.tab').forEach((tab) =>
 );
 
 // Close modals when tapping the dimmed backdrop
-for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop', 'update-backdrop']) {
+for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop', 'update-backdrop', 'day-backdrop']) {
   $(id).addEventListener('click', (e) => {
     if (e.target === e.currentTarget && id !== 'scan-backdrop') e.currentTarget.classList.add('hidden');
   });
