@@ -13,6 +13,7 @@ const SOON_DAYS = 3;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REPO = 'ryleyp/grocery-tracker';
 const GITHUB_MAIN_COMMIT = `https://api.github.com/repos/${REPO}/commits/main`;
+const REFRESH_SNAPSHOT_KEY = 'grocery-tracker-refresh-snapshot-v1';
 
 let items = loadItems();
 let purchases = loadPurchases();
@@ -352,6 +353,42 @@ async function clearAppCaches() {
   }
 }
 
+function saveRefreshSnapshot() {
+  try {
+    sessionStorage.setItem(
+      REFRESH_SNAPSHOT_KEY,
+      JSON.stringify({
+        items,
+        purchases,
+        savedAt: new Date().toISOString(),
+      })
+    );
+  } catch {
+    // The regular localStorage copy is still the source of truth.
+  }
+}
+
+function restoreRefreshSnapshotIfNeeded() {
+  let snapshot = null;
+  try {
+    snapshot = JSON.parse(sessionStorage.getItem(REFRESH_SNAPSHOT_KEY) || 'null');
+  } catch {
+    snapshot = null;
+  }
+
+  try {
+    sessionStorage.removeItem(REFRESH_SNAPSHOT_KEY);
+  } catch {}
+
+  if (!snapshot || !Array.isArray(snapshot.items) || !Array.isArray(snapshot.purchases)) return;
+  if (items.length || !snapshot.items.length) return;
+
+  items = snapshot.items;
+  purchases = snapshot.purchases;
+  persist();
+  savePurchases(purchases);
+}
+
 $('btn-update').addEventListener('click', async () => {
   const btn = $('btn-update');
   btn.disabled = true;
@@ -375,7 +412,7 @@ $('btn-update').addEventListener('click', async () => {
     if (BUILD_SHA && BUILD_SHA !== 'dev' && latestSha && latestSha !== BUILD_SHA) {
       showUpdateStatus(
         'Update available',
-        `GitHub has ${shortSha(latestSha)}. This app is running ${shortSha(BUILD_SHA)}. Refresh to load the newest version.`,
+        `GitHub has ${shortSha(latestSha)}. This app is running ${shortSha(BUILD_SHA)}. Update to load the newest app code. Your groceries stay saved on this device.`,
         true
       );
     } else if (BUILD_SHA === 'dev') {
@@ -399,7 +436,8 @@ $('btn-update-close').addEventListener('click', () => $('update-backdrop').class
 
 $('btn-update-refresh').addEventListener('click', async () => {
   $('btn-update-refresh').disabled = true;
-  showUpdateStatus('Refreshing app', 'Clearing the saved app shell so the newest files load from GitHub Pages.');
+  showUpdateStatus('Updating app', 'Refreshing the app code only. Your grocery list and spending history will stay saved.');
+  saveRefreshSnapshot();
   await clearAppCaches();
   window.location.reload();
 });
@@ -798,6 +836,7 @@ for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-bac
 
 // ---------- boot ----------
 
+restoreRefreshSnapshotIfNeeded();
 render();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
