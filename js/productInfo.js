@@ -1,5 +1,6 @@
 const CACHE_KEY = 'grocery-tracker-product-info-v1';
 const OFF_SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
+const OFF_BARCODE_URL = 'https://world.openfoodfacts.org/api/v2/product';
 const HIT_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const MISS_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const DEFAULT_LOOKUP_LIMIT = 6;
@@ -172,6 +173,33 @@ async function fetchProductInfo(name) {
   const data = await res.json();
   const product = bestProduct(data.products, query);
   return product ? toProductInfo(product, query) : null;
+}
+
+// Look a product up by its scanned barcode (UPC/EAN). Returns product info
+// shaped like lookupProductInfo, plus the resolved productName so callers can
+// prefill an item name. Falls back gracefully when offline or unmatched.
+export async function lookupProductByBarcode(barcode) {
+  if (typeof window === 'undefined' || !('fetch' in window)) return { info: null, unavailable: true };
+  const code = String(barcode || '').replace(/\D/g, '');
+  if (code.length < 6) return { info: null, unavailable: false };
+
+  try {
+    const url = `${OFF_BARCODE_URL}/${code}.json?fields=product_name,brands,categories,categories_tags,food_groups_tags,quantity`;
+    const res = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
+    if (!res.ok) {
+      const err = new Error('Product info is unavailable');
+      err.unavailable = true;
+      throw err;
+    }
+    const data = await res.json();
+    if (data.status !== 1 || !data.product || !data.product.product_name) {
+      return { info: null, unavailable: false, barcode: code };
+    }
+    const info = toProductInfo(data.product, `barcode:${code}`);
+    return { info, unavailable: false, barcode: code, productName: data.product.product_name };
+  } catch (err) {
+    return { info: null, unavailable: Boolean(err.unavailable), barcode: code };
+  }
 }
 
 export async function lookupProductInfo(name) {
