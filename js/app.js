@@ -1,6 +1,7 @@
 import { loadItems, saveItems, loadPurchases, savePurchases, newId } from './store.js';
 import { parseReceiptText, guessFood } from './parser.js';
 import { recognizeReceipt } from './ocr.js';
+import { applyProductInfo, enrichItemsWithProductInfo, lookupProductInfo, productInfoLabel } from './productInfo.js';
 import { BUILD_BRANCH, BUILD_SHA, BUILD_TIME } from './version.js';
 
 const LOCATIONS = {
@@ -19,6 +20,7 @@ let items = loadItems();
 let purchases = loadPurchases();
 let currentTab = 'fridge';
 let editingId = null; // null = adding new
+let editingProductInfo = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -81,6 +83,44 @@ function itemEmoji(item) {
 
 function fmtMoney(n) {
   return '$' + n.toFixed(2);
+}
+
+function daysUntil(date) {
+  return validDate(date) ? Math.max(0, daysLeft(date)) : 7;
+}
+
+function sanitizeProductInfo(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const suggestion = raw.suggestion && Object.hasOwn(LOCATIONS, raw.suggestion.location)
+    ? {
+        location: raw.suggestion.location,
+        days: Number.isFinite(Number(raw.suggestion.days)) ? Math.max(1, Math.round(Number(raw.suggestion.days))) : 7,
+        emoji: typeof raw.suggestion.emoji === 'string' ? raw.suggestion.emoji : LOCATIONS[raw.suggestion.location].emoji,
+        confidence: Number.isFinite(Number(raw.suggestion.confidence)) ? Number(raw.suggestion.confidence) : 0,
+      }
+    : null;
+
+  return {
+    source: typeof raw.source === 'string' ? raw.source.slice(0, 40) : 'Open Food Facts',
+    query: typeof raw.query === 'string' ? raw.query.slice(0, 120) : '',
+    productName: typeof raw.productName === 'string' ? raw.productName.slice(0, 120) : '',
+    brand: typeof raw.brand === 'string' ? raw.brand.slice(0, 80) : '',
+    category: typeof raw.category === 'string' ? raw.category.slice(0, 120) : '',
+    quantity: typeof raw.quantity === 'string' ? raw.quantity.slice(0, 60) : '',
+    suggestion,
+    matchedAt: typeof raw.matchedAt === 'string' ? raw.matchedAt : new Date().toISOString(),
+  };
+}
+
+function productInfoNote(result, note) {
+  if (!result) return note;
+  if (result.matched) {
+    return `${note} Product info matched ${result.matched} item${result.matched === 1 ? '' : 's'} online.`;
+  }
+  if (result.unavailable) {
+    return `${note} Online product info was unavailable, so local categories were used.`;
+  }
+  return note;
 }
 
 // Keep the purchase log in step with an item: create/update the entry
@@ -241,12 +281,14 @@ function itemCard(item, { tossOnly = false } = {}) {
 function openEdit(id) {
   editingId = id || null;
   const item = id ? items.find((i) => i.id === id) : null;
+  editingProductInfo = sanitizeProductInfo(item?.productInfo);
   $('edit-title').textContent = item ? 'Edit item' : 'Add item';
   $('edit-name').value = item ? item.name : '';
   $('edit-location').value = item ? item.location : (currentTab === 'spend' ? 'pantry' : currentTab);
   $('edit-expires').value = item ? item.expiresAt : addDays(7);
   $('edit-purchased').value = item ? purchaseDate(item) : todayStr();
   $('edit-price').value = item && item.price > 0 ? item.price.toFixed(2) : '';
+  $('edit-info-status').textContent = editingProductInfo ? productInfoLabel(editingProductInfo) : '';
   $('btn-edit-delete').classList.toggle('hidden', !item);
   $('edit-backdrop').classList.remove('hidden');
   if (!item) $('edit-name').focus();
@@ -255,6 +297,7 @@ function openEdit(id) {
 function closeEdit() {
   $('edit-backdrop').classList.add('hidden');
   editingId = null;
+  editingProductInfo = null;
 }
 
 $('btn-edit-save').addEventListener('click', () => {
@@ -272,9 +315,9 @@ $('btn-edit-save').addEventListener('click', () => {
   let item;
   if (editingId) {
     item = items.find((i) => i.id === editingId);
-    Object.assign(item, { name, location, expiresAt, purchasedAt, price });
+    Object.assign(item, { name, location, expiresAt, purchasedAt, price, productInfo: editingProductInfo });
   } else {
-    item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price };
+    item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price, productInfo: editingProductInfo };
     items.push(item);
   }
   syncPurchase(item);
@@ -294,12 +337,53 @@ $('btn-edit-delete').addEventListener('click', () => {
 
 // Suggest expiry/location as the user types a new item's name
 $('edit-name').addEventListener('input', () => {
+  editingProductInfo = null;
+  $('edit-info-status').textContent = '';
   if (editingId) return;
   const guess = guessFood($('edit-name').value);
   if (guess.matched) {
     $('edit-location').value = guess.location;
     $('edit-expires').value = addDays(guess.days);
   }
+});
+
+$('btn-edit-lookup').addEventListener('click', async () => {
+  const name = $('edit-name').value.trim();
+  if (!name) {
+    $('edit-name').focus();
+    return;
+  }
+
+  const btn = $('btn-edit-lookup');
+  btn.disabled = true;
+  $('edit-info-status').textContent = 'Checking product info...';
+
+  const result = await lookupProductInfo(name);
+  if (result.unavailable) {
+    $('edit-info-status').textContent = 'Product info is unavailable right now.';
+    btn.disabled = false;
+    return;
+  }
+  if (!result.info) {
+    $('edit-info-status').textContent = 'No product match found.';
+    btn.disabled = false;
+    return;
+  }
+
+  const current = {
+    name,
+    location: $('edit-location').value,
+    days: daysUntil($('edit-expires').value),
+    matched: false,
+  };
+  const applied = applyProductInfo(current, result.info).item;
+  editingProductInfo = sanitizeProductInfo(applied.productInfo);
+  if (applied.productMatched) {
+    $('edit-location').value = applied.location;
+    $('edit-expires').value = addDays(applied.days);
+  }
+  $('edit-info-status').textContent = productInfoLabel(editingProductInfo);
+  btn.disabled = false;
 });
 
 // ---------- add sheet ----------
@@ -521,7 +605,7 @@ async function handleScanFiles(e) {
     }
   }
 
-  const merged = mergeParsedItems(parsed);
+  let merged = mergeParsedItems(parsed);
   if (!merged.length) {
     const msg = failed.length
       ? "We couldn't read enough text from those images. Try brighter screenshots, crop to the receipt/order list, or add items manually."
@@ -532,10 +616,23 @@ async function handleScanFiles(e) {
     return;
   }
 
+  let productResult = null;
+  if (navigator.onLine !== false) {
+    $('scan-status').textContent = 'Checking product info...';
+    productResult = await enrichItemsWithProductInfo(merged, {
+      onProgress: ({ checked }) => {
+        $('scan-status').textContent = checked
+          ? `Checking product info (${checked})...`
+          : 'Checking product info...';
+      },
+    });
+    merged = productResult.items;
+  }
+
   const note = files.length > 1
     ? `Found ${merged.length} possible item${merged.length === 1 ? '' : 's'} across ${files.length} image${files.length === 1 ? '' : 's'}. Fix anything that looks off before saving${failed.length ? `; ${failed.length} image${failed.length === 1 ? '' : 's'} could not be read.` : '.'}`
     : 'Uncheck anything that is not food. Fix names, spots, dates, and prices as needed.';
-  showReview(merged, note);
+  showReview(merged, productInfoNote(productResult, note));
 }
 
 $('receipt-input').addEventListener('change', handleScanFiles);
@@ -552,7 +649,27 @@ function closeScan() {
   $('scan-backdrop').classList.add('hidden');
 }
 
-function reviewRow({ name = '', location = 'pantry', days = 7, price = null, purchasedAt = todayStr(), checked = true } = {}) {
+function setRowProductInfo(row, info, el) {
+  const safeInfo = sanitizeProductInfo(info);
+  if (safeInfo) {
+    row.dataset.productInfo = JSON.stringify(safeInfo);
+    el.textContent = productInfoLabel(safeInfo);
+  } else {
+    row.dataset.productInfo = '';
+    el.textContent = '';
+  }
+  el.classList.toggle('hidden', !safeInfo);
+}
+
+function rowProductInfo(row) {
+  try {
+    return sanitizeProductInfo(JSON.parse(row.dataset.productInfo || 'null'));
+  } catch {
+    return null;
+  }
+}
+
+function reviewRow({ name = '', location = 'pantry', days = 7, price = null, purchasedAt = todayStr(), checked = true, productInfo = null } = {}) {
   const li = document.createElement('li');
   li.className = 'review-row';
 
@@ -601,6 +718,14 @@ function reviewRow({ name = '', location = 'pantry', days = 7, price = null, pur
   priceInput.setAttribute('aria-label', 'Price');
   if (price > 0) priceInput.value = price.toFixed(2);
 
+  const info = document.createElement('div');
+  info.className = 'review-info hidden';
+  setRowProductInfo(li, productInfo, info);
+
+  nameInput.addEventListener('input', () => {
+    if (rowProductInfo(li)) setRowProductInfo(li, null, info);
+  });
+
   // Re-guess when the user corrects an OCR'd name
   nameInput.addEventListener('change', () => {
     const guess = guessFood(nameInput.value);
@@ -611,7 +736,7 @@ function reviewRow({ name = '', location = 'pantry', days = 7, price = null, pur
   });
 
   meta.append(sel, expiresInput, purchasedInput, priceInput);
-  li.append(cb, nameInput, meta);
+  li.append(cb, nameInput, meta, info);
   return li;
 }
 
@@ -624,8 +749,45 @@ function showReview(parsed, note = 'Review the auto-sorted items, then fix anyth
   $('scan-review').classList.remove('hidden');
 }
 
+function currentReviewItems() {
+  return [...$('review-list').querySelectorAll('.review-row')].map((row) => {
+    const name = row.querySelector('.review-name').value.trim();
+    const location = row.querySelector('select').value;
+    const expiresAt = row.querySelector('.review-expires').value;
+    const purchasedAt = row.querySelector('.review-purchased').value || todayStr();
+    const priceVal = parseFloat(row.querySelector('.review-price').value);
+    return {
+      name,
+      location,
+      days: daysUntil(expiresAt),
+      price: Number.isFinite(priceVal) && priceVal > 0 ? Math.round(priceVal * 100) / 100 : null,
+      purchasedAt,
+      checked: row.querySelector('input[type="checkbox"]').checked,
+      productInfo: rowProductInfo(row),
+      matched: false,
+    };
+  });
+}
+
 $('btn-review-add-row').addEventListener('click', () => {
   $('review-list').appendChild(reviewRow({ checked: true }));
+});
+
+$('btn-review-lookup').addEventListener('click', async () => {
+  const current = currentReviewItems().filter((item) => item.name);
+  if (!current.length) return;
+
+  const btn = $('btn-review-lookup');
+  btn.disabled = true;
+  btn.textContent = 'Checking product info...';
+  const result = await enrichItemsWithProductInfo(current, {
+    onProgress: ({ checked }) => {
+      btn.textContent = checked ? `Checking product info (${checked})...` : 'Checking product info...';
+    },
+  });
+  btn.disabled = false;
+  btn.textContent = '🔎 Look up product info';
+  showReview(result.items, productInfoNote(result, 'Review the product matches, then fix anything that looks off before saving.'));
 });
 
 $('btn-review-cancel').addEventListener('click', closeScan);
@@ -647,7 +809,7 @@ $('btn-review-save').addEventListener('click', () => {
     const purchasedAt = row.querySelector('.review-purchased').value || todayStr();
     const priceVal = parseFloat(row.querySelector('.review-price').value);
     const price = Number.isFinite(priceVal) && priceVal > 0 ? Math.round(priceVal * 100) / 100 : null;
-    const item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price };
+    const item = { id: newId(), name, location, expiresAt, addedAt: todayStr(), purchasedAt, price, productInfo: rowProductInfo(row) };
     items.push(item);
     syncPurchase(item);
     added++;
@@ -731,6 +893,7 @@ function sanitizeItems(raw) {
       addedAt,
       purchasedAt: validDate(r.purchasedAt) ? r.purchasedAt : addedAt,
       price: Number.isFinite(price) && price > 0 ? Math.round(price * 100) / 100 : null,
+      productInfo: sanitizeProductInfo(r.productInfo),
     });
   }
   return out;

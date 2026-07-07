@@ -430,6 +430,21 @@ main {
   cursor: pointer;
 }
 
+.link-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.edit-lookup {
+  padding: 10px 0 0;
+}
+
+.product-info-status {
+  min-height: 1.2em;
+  margin: 4px 0 0;
+  font-weight: 700;
+}
+
 .field {
   display: block;
   margin-top: 14px;
@@ -628,6 +643,15 @@ main {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+
+.review-info {
+  grid-column: 2;
+  color: var(--blue-deep);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 430px) {

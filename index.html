@@ -120,6 +120,7 @@
         <h2>Found from your scan</h2>
         <p id="scan-review-note" class="muted small">Review the auto-sorted items, then fix anything that looks off before saving.</p>
         <ul id="review-list" class="review-list"></ul>
+        <button id="btn-review-lookup" class="link-btn" type="button">🔎 Look up product info</button>
         <button id="btn-review-add-row" class="link-btn" type="button">＋ Add a missed item</button>
         <div class="modal-actions">
           <button id="btn-review-cancel" class="btn ghost" type="button">Cancel</button>
@@ -144,6 +145,8 @@
       <label class="field">Name
         <input id="edit-name" type="text" placeholder="e.g. Milk" autocomplete="off">
       </label>
+      <button id="btn-edit-lookup" class="link-btn edit-lookup" type="button">🔎 Look up product info</button>
+      <p id="edit-info-status" class="muted small product-info-status"></p>
       <label class="field">Where it lives
         <select id="edit-location">
           <option value="fridge">🧊 Fridge</option>

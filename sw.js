@@ -1,4 +1,4 @@
-const CACHE = 'grocery-tracker-v8';
+const CACHE = 'grocery-tracker-v9';
 
 const APP_SHELL = [
   '.',
@@ -8,6 +8,7 @@ const APP_SHELL = [
   'js/store.js',
   'js/parser.js',
   'js/foodData.js',
+  'js/productInfo.js',
   'js/ocr.js',
   'js/version.js',
   'manifest.webmanifest',
