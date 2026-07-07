@@ -36,6 +36,23 @@
       </div>
     </section>
 
+    <section id="calendar" class="hidden">
+      <div class="cal-header">
+        <button id="cal-prev" class="icon-btn cal-nav" type="button" aria-label="Previous month">‹</button>
+        <h2 id="cal-month-label">July 2026</h2>
+        <button id="cal-next" class="icon-btn cal-nav" type="button" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-weekdays">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <div class="cal-legend">
+        <span><i class="cal-dot ok"></i> fine</span>
+        <span><i class="cal-dot soon"></i> soon</span>
+        <span><i class="cal-dot expired"></i> expired</span>
+      </div>
+    </section>
+
     <section id="spend" class="hidden">
       <div class="section-head">
         <h2>💸 Spending</h2>
@@ -56,6 +73,7 @@
     <button class="tab active" data-tab="fridge" type="button"><span class="tab-icon">🧊</span>Fridge<span class="tab-badge hidden" data-badge="fridge"></span></button>
     <button class="tab" data-tab="freezer" type="button"><span class="tab-icon">❄️</span>Freezer<span class="tab-badge hidden" data-badge="freezer"></span></button>
     <button class="tab" data-tab="pantry" type="button"><span class="tab-icon">🥫</span>Pantry<span class="tab-badge hidden" data-badge="pantry"></span></button>
+    <button class="tab" data-tab="calendar" type="button"><span class="tab-icon">📅</span>Calendar</button>
     <button class="tab" data-tab="spend" type="button"><span class="tab-icon">💸</span>Spend</button>
   </nav>
 
@@ -180,6 +198,17 @@
       <div class="modal-actions">
         <button id="btn-toss-close" class="btn ghost" type="button">Close</button>
         <button id="btn-toss-all" class="btn danger" type="button">Tossed them all</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar day detail -->
+  <div id="day-backdrop" class="backdrop hidden">
+    <div class="modal" role="dialog" aria-label="Items expiring this day">
+      <h2 id="day-title">Items</h2>
+      <ul id="day-list" class="item-list"></ul>
+      <div class="modal-actions">
+        <button id="btn-day-close" class="btn ghost" type="button">Close</button>
       </div>
     </div>
   </div>

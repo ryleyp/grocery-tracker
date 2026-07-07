@@ -21,6 +21,7 @@ let purchases = loadPurchases();
 let currentTab = 'fridge';
 let editingId = null; // null = adding new
 let editingProductInfo = null;
+let calendarMonthOffset = 0; // months relative to the current month
 
 const $ = (id) => document.getElementById(id);
 
@@ -145,11 +146,15 @@ function persist() {
 
 function render() {
   const isSpend = currentTab === 'spend';
-  $('inventory').classList.toggle('hidden', isSpend);
+  const isCalendar = currentTab === 'calendar';
+  $('inventory').classList.toggle('hidden', isSpend || isCalendar);
   $('spend').classList.toggle('hidden', !isSpend);
+  $('calendar').classList.toggle('hidden', !isCalendar);
 
   if (isSpend) {
     renderSpend();
+  } else if (isCalendar) {
+    renderCalendar();
   } else {
     const loc = LOCATIONS[currentTab];
     $('section-title').textContent = `${loc.emoji} ${loc.label}`;
@@ -239,6 +244,96 @@ function renderSpend() {
   }
 }
 
+function dateKey(y, m, d) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function renderCalendar() {
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth() + calendarMonthOffset, 1);
+  const year = base.getFullYear();
+  const month = base.getMonth();
+
+  $('cal-month-label').textContent = base.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  const byDate = new Map();
+  for (const item of items) {
+    const list = byDate.get(item.expiresAt) || [];
+    list.push(item);
+    byDate.set(item.expiresAt, list);
+  }
+
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = todayStr();
+
+  const grid = $('cal-grid');
+  grid.innerHTML = '';
+
+  for (let i = 0; i < firstWeekday; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'cal-day empty';
+    grid.appendChild(blank);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = dateKey(year, month, d);
+    const dayItems = byDate.get(key) || [];
+
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'cal-day' + (key === todayKey ? ' today' : '');
+
+    const num = document.createElement('span');
+    num.textContent = d;
+    cell.appendChild(num);
+
+    if (dayItems.length) {
+      const statuses = new Set(dayItems.map(expiryStatus));
+      const dots = document.createElement('span');
+      dots.className = 'cal-dots';
+      for (const s of ['expired', 'soon', 'ok']) {
+        if (statuses.has(s)) {
+          const dot = document.createElement('i');
+          dot.className = `cal-dot ${s}`;
+          dots.appendChild(dot);
+        }
+      }
+      cell.appendChild(dots);
+      cell.addEventListener('click', () => openDayModal(key, dayItems));
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+function openDayModal(key, dayItems) {
+  const [y, m, d] = key.split('-').map(Number);
+  $('day-title').textContent = new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  const ul = $('day-list');
+  ul.innerHTML = '';
+  for (const item of dayItems.sort((a, b) => a.name.localeCompare(b.name))) {
+    ul.appendChild(itemCard(item));
+  }
+  $('day-backdrop').classList.remove('hidden');
+}
+
+$('cal-prev').addEventListener('click', () => {
+  calendarMonthOffset--;
+  renderCalendar();
+});
+
+$('cal-next').addEventListener('click', () => {
+  calendarMonthOffset++;
+  renderCalendar();
+});
+
+$('btn-day-close').addEventListener('click', () => $('day-backdrop').classList.add('hidden'));
+
 function itemCard(item, { tossOnly = false } = {}) {
   const li = document.createElement('li');
   const status = expiryStatus(item);
@@ -279,6 +374,7 @@ function itemCard(item, { tossOnly = false } = {}) {
 // ---------- add / edit modal ----------
 
 function openEdit(id) {
+  $('day-backdrop').classList.add('hidden');
   editingId = id || null;
   const item = id ? items.find((i) => i.id === id) : null;
   editingProductInfo = sanitizeProductInfo(item?.productInfo);
@@ -991,7 +1087,7 @@ document.querySelectorAll('.tab').forEach((tab) =>
 );
 
 // Close modals when tapping the dimmed backdrop
-for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop', 'update-backdrop']) {
+for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-backdrop', 'import-backdrop', 'update-backdrop', 'day-backdrop']) {
   $(id).addEventListener('click', (e) => {
     if (e.target === e.currentTarget && id !== 'scan-backdrop') e.currentTarget.classList.add('hidden');
   });
