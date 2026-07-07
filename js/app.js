@@ -408,11 +408,45 @@ $('btn-update-refresh').addEventListener('click', async () => {
 
 function mergeParsedItems(parsed) {
   const out = [];
-  const seen = new Set();
+  const normalized = [];
+
+  function keyFor(name) {
+    return name
+      .toLowerCase()
+      .replace(/\bh-e-b\b/g, ' ')
+      .replace(/\bavg\b/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function overlaps(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const min = Math.min(a.length, b.length);
+    return min >= 14 && (a.includes(b) || b.includes(a));
+  }
+
+  function score(item) {
+    let total = 0;
+    if (item.price > 0) total += 100;
+    if (item.name.includes('H-E-B')) total += 8;
+    if (item.matched) total += 4;
+    total += Math.min(item.name.length, 80) / 10;
+    return total;
+  }
+
   for (const item of parsed) {
-    const key = `${item.name.toLowerCase()}|${item.price || ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const key = keyFor(item.name);
+    const existingIndex = normalized.findIndex((existing) => overlaps(existing, key));
+    if (existingIndex >= 0) {
+      if (score(item) > score(out[existingIndex])) {
+        out[existingIndex] = item;
+        normalized[existingIndex] = key;
+      }
+      continue;
+    }
+    normalized.push(key);
     out.push(item);
   }
   return out;
@@ -543,7 +577,7 @@ function reviewRow({ name = '', location = 'pantry', days = 7, price = null, pur
   return li;
 }
 
-function showReview(parsed, note = 'Uncheck anything that is not food. Fix names, spots, dates, and prices as needed.') {
+function showReview(parsed, note = 'Review the auto-sorted items, then fix anything that looks off before saving.') {
   const ul = $('review-list');
   ul.innerHTML = '';
   for (const p of parsed) ul.appendChild(reviewRow(p));

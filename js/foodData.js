@@ -8,6 +8,13 @@ export const FOOD_DB = [
   { keywords: ['ice cream', 'icecream', 'popsicle', 'sorbet', 'gelato'], location: 'freezer', days: 60, emoji: '🍦' },
   { keywords: ['frozen', 'froz ', 'frz'], location: 'freezer', days: 90, emoji: '❄️' },
 
+  // Shelf-stable packaged foods that can contain misleading fresh words
+  { keywords: ['cereal', 'crl ', 'crunch berries', 'granola', 'oatmeal', 'oats', 'grits'], location: 'pantry', days: 180, emoji: '🥣' },
+  { keywords: ['cheese puff', 'cheese puffs'], location: 'pantry', days: 60, emoji: '🍿' },
+  { keywords: ['powder drink mix', 'drink mix', 'nesquik'], location: 'pantry', days: 180, emoji: '🥤' },
+  { keywords: ['energy drink', 'drink cans', 'v8 energy'], location: 'pantry', days: 180, emoji: '🥤' },
+  { keywords: ['syrup', 'maple'], location: 'pantry', days: 730, emoji: '🍯' },
+
   // Non-dairy "milks" and long-life dairy-ish (before generic milk)
   { keywords: ['almond milk', 'oat milk', 'soy milk', 'coconut milk', 'almond mlk', 'oat mlk'], location: 'fridge', days: 10, emoji: '🥛' },
 

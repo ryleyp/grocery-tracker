@@ -62,8 +62,8 @@
   <!-- Add choice sheet -->
   <div id="sheet-backdrop" class="backdrop hidden">
     <div class="sheet" role="dialog" aria-label="Add items">
-      <button id="btn-scan" class="sheet-btn" type="button">📷 Snap a paper receipt</button>
-      <button id="btn-upload" class="sheet-btn" type="button">🖼️ Upload screenshots or photos</button>
+      <button id="btn-scan" class="sheet-btn" type="button">📷 Scan a receipt or order</button>
+      <button id="btn-upload" class="sheet-btn" type="button">🖼️ Import receipt/order screenshots</button>
       <button id="btn-manual" class="sheet-btn" type="button">✏️ Add item manually</button>
       <button id="btn-sheet-cancel" class="sheet-btn cancel" type="button">Cancel</button>
     </div>
@@ -117,8 +117,8 @@
         <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
       </div>
       <div id="scan-review" class="hidden">
-        <h2>Found on your receipt</h2>
-        <p id="scan-review-note" class="muted small">Uncheck anything that isn't food. Fix names, spots, dates, and prices as needed.</p>
+        <h2>Found from your scan</h2>
+        <p id="scan-review-note" class="muted small">Review the auto-sorted items, then fix anything that looks off before saving.</p>
         <ul id="review-list" class="review-list"></ul>
         <button id="btn-review-add-row" class="link-btn" type="button">＋ Add a missed item</button>
         <div class="modal-actions">
