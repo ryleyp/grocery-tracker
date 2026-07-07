@@ -3,36 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#4779cc">
+  <meta name="theme-color" content="#f2f2f7">
   <title>Grocery Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="app-header">
-    <h1>🥕 Grocery Tracker</h1>
-    <div class="header-actions">
+    <div class="header-copy">
+      <h1>My Fridge</h1>
       <button id="alert-chip" class="alert-chip hidden" type="button"></button>
-      <button id="btn-update" class="icon-btn" type="button" aria-label="Check for updates">↻</button>
-      <button id="btn-backup" class="icon-btn" type="button" aria-label="Backup">💾</button>
     </div>
+    <button id="fab" class="add-btn" type="button" aria-label="Add items">＋</button>
   </header>
 
   <main id="main">
-    <section id="inventory">
+    <section id="dashboard" class="dashboard-screen">
+      <div id="category-cards" class="category-stack"></div>
+
+      <div class="expiring-head">
+        <h2>Expiring Soon</h2>
+        <button id="btn-expiring-add" class="mini-add" type="button">Add</button>
+      </div>
+      <ul id="expiring-list" class="expiring-list"></ul>
+    </section>
+
+    <section id="inventory" class="hidden">
       <div class="section-head">
-        <h2 id="section-title">Fridge</h2>
+        <h2 id="section-title">Grocery List</h2>
         <span id="section-count" class="count-pill"></span>
       </div>
       <ul id="item-list" class="item-list"></ul>
       <div id="empty-state" class="empty-state hidden">
-        <p class="empty-emoji" id="empty-emoji">🧊</p>
+        <p class="empty-emoji" id="empty-emoji">🛒</p>
         <p id="empty-text">Nothing in here yet.</p>
-        <p class="muted">Tap <strong>＋</strong> to scan a receipt or add items 🧾</p>
+        <p class="muted">Tap <strong>＋</strong> to scan a receipt or add items.</p>
       </div>
     </section>
 
@@ -48,15 +57,45 @@
       <ul id="month-list" class="month-list"></ul>
       <p class="muted small">Totals come from item prices captured off your receipts and screenshots — you can fix any price while reviewing a scan or editing an item.</p>
     </section>
+
+    <section id="settings" class="hidden">
+      <div class="section-head">
+        <h2>Settings</h2>
+      </div>
+      <div class="settings-card">
+        <button id="btn-update" class="settings-row" type="button">
+          <span class="settings-icon">↻</span>
+          <span class="settings-copy">
+            <strong>Refresh App</strong>
+            <small>Check for the newest version</small>
+          </span>
+          <span class="settings-action">↻</span>
+        </button>
+        <button id="btn-backup" class="settings-row" type="button">
+          <span class="settings-icon">▣</span>
+          <span class="settings-copy">
+            <strong>Backup & Restore</strong>
+            <small>Export or import saved groceries</small>
+          </span>
+          <span class="settings-action">›</span>
+        </button>
+        <button id="btn-spend" class="settings-row" type="button">
+          <span class="settings-icon">$</span>
+          <span class="settings-copy">
+            <strong>Monthly Spending</strong>
+            <small>Review receipt totals by month</small>
+          </span>
+          <span class="settings-action">›</span>
+        </button>
+      </div>
+    </section>
   </main>
 
-  <button id="fab" class="fab" type="button" aria-label="Add items">＋</button>
-
   <nav class="tab-bar">
-    <button class="tab active" data-tab="fridge" type="button"><span class="tab-icon">🧊</span>Fridge<span class="tab-badge hidden" data-badge="fridge"></span></button>
-    <button class="tab" data-tab="freezer" type="button"><span class="tab-icon">❄️</span>Freezer<span class="tab-badge hidden" data-badge="freezer"></span></button>
-    <button class="tab" data-tab="pantry" type="button"><span class="tab-icon">🥫</span>Pantry<span class="tab-badge hidden" data-badge="pantry"></span></button>
-    <button class="tab" data-tab="spend" type="button"><span class="tab-icon">💸</span>Spend</button>
+    <button class="tab active" data-tab="home" type="button"><span class="tab-icon">⌂</span>Home<span class="tab-badge hidden" data-badge="home"></span></button>
+    <button class="tab" data-tab="scan" type="button"><span class="tab-icon">▣</span>Scan</button>
+    <button class="tab" data-tab="list" type="button"><span class="tab-icon">☰</span>List</button>
+    <button class="tab" data-tab="settings" type="button"><span class="tab-icon">⚙</span>Settings</button>
   </nav>
 
   <!-- Add choice sheet -->

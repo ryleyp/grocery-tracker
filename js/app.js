@@ -10,6 +10,50 @@ const LOCATIONS = {
   pantry: { label: 'Pantry', emoji: '🥫', empty: 'The pantry is bare!' },
 };
 
+const CATEGORY_RULES = [
+  {
+    title: 'Produce',
+    keywords: ['apple', 'spinach', 'lettuce', 'romaine', 'kale', 'salad', 'berry', 'berries', 'grape', 'orange', 'lemon', 'lime', 'broccoli', 'carrot', 'celery', 'cucumber', 'pepper', 'zucchini', 'squash', 'mushroom', 'asparagus', 'corn', 'cilantro', 'parsley', 'basil', 'avocado', 'peach', 'plum', 'pear', 'mango', 'kiwi', 'melon'],
+  },
+  {
+    title: 'Dairy',
+    keywords: ['milk', 'yogurt', 'yoghurt', 'cream', 'cheese', 'butter', 'egg', 'tofu'],
+  },
+  {
+    title: 'Meat & Seafood',
+    keywords: ['beef', 'steak', 'chicken', 'pork', 'turkey', 'salmon', 'tilapia', 'shrimp', 'fish', 'bacon', 'sausage', 'ham', 'deli'],
+  },
+  {
+    title: 'Prepared',
+    keywords: ['hummus', 'salsa', 'guacamole', 'dip', 'dough', 'juice', 'lemonade'],
+  },
+  {
+    title: 'Condiments',
+    keywords: ['mayo', 'ketchup', 'mustard', 'relish', 'sauce', 'dressing', 'jam', 'jelly', 'pickle', 'olive', 'kimchi'],
+  },
+];
+
+const DEMO_CATEGORIES = [
+  {
+    title: 'Produce',
+    badgeText: 'Expires: 2 days',
+    tone: 'danger',
+    items: [
+      { name: 'Apples', meta: '(6)', emoji: '🍎', demo: true },
+      { name: 'Spinach', meta: '(1 bag)', emoji: '🥬', demo: true },
+    ],
+  },
+  {
+    title: 'Dairy',
+    badgeText: 'Expires: 2 days',
+    tone: 'warning',
+    items: [
+      { name: 'Milk', meta: '(1 gal)', emoji: '🥛', demo: true },
+      { name: 'Yogurt', meta: '(3)', emoji: '🥣', demo: true },
+    ],
+  },
+];
+
 const SOON_DAYS = 3;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REPO = 'ryleyp/grocery-tracker';
@@ -18,7 +62,7 @@ const REFRESH_SNAPSHOT_KEY = 'grocery-tracker-refresh-snapshot-v1';
 
 let items = loadItems();
 let purchases = loadPurchases();
-let currentTab = 'fridge';
+let currentTab = 'home';
 let editingId = null; // null = adding new
 let editingProductInfo = null;
 
@@ -79,6 +123,38 @@ function expiryText(item) {
 
 function itemEmoji(item) {
   return item.emoji || guessFood(item.name).emoji;
+}
+
+function itemCategory(item) {
+  const name = ` ${item.name.toLowerCase()} `;
+  const rule = CATEGORY_RULES.find((category) =>
+    category.keywords.some((keyword) => name.includes(keyword))
+  );
+  if (rule) return rule.title;
+  if (item.location === 'freezer') return 'Frozen';
+  if (item.location === 'pantry') return 'Pantry';
+  return 'Other';
+}
+
+function compactDaysLabel(left) {
+  if (left < 0) return 'Expired';
+  if (left === 0) return 'Expires: today';
+  if (left === 1) return 'Expires: 1 day';
+  return `Expires: ${left} days`;
+}
+
+function badgeTone(left) {
+  if (left <= 2) return 'danger';
+  if (left <= 5) return 'warning';
+  return 'good';
+}
+
+function dashboardMeta(item) {
+  const left = daysLeft(item.expiresAt);
+  if (left < 0) return '(expired)';
+  if (left === 0) return '(today)';
+  if (left === 1) return '(1 day)';
+  return `(${left} days)`;
 }
 
 function fmtMoney(n) {
@@ -144,48 +220,189 @@ function persist() {
 }
 
 function render() {
-  const isSpend = currentTab === 'spend';
-  $('inventory').classList.toggle('hidden', isSpend);
-  $('spend').classList.toggle('hidden', !isSpend);
+  $('dashboard').classList.toggle('hidden', currentTab !== 'home');
+  $('inventory').classList.toggle('hidden', currentTab !== 'list');
+  $('spend').classList.toggle('hidden', currentTab !== 'spend');
+  $('settings').classList.toggle('hidden', currentTab !== 'settings');
 
-  if (isSpend) {
-    renderSpend();
-  } else {
-    const loc = LOCATIONS[currentTab];
-    $('section-title').textContent = `${loc.emoji} ${loc.label}`;
-    $('empty-emoji').textContent = loc.emoji;
-    $('empty-text').textContent = loc.empty;
+  if (currentTab === 'home') renderDashboard();
+  if (currentTab === 'list') renderInventoryList();
+  if (currentTab === 'spend') renderSpend();
 
-    const list = items
-      .filter((i) => i.location === currentTab)
-      .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.name.localeCompare(b.name));
-
-    $('section-count').textContent = list.length ? `${list.length} item${list.length === 1 ? '' : 's'}` : '';
-    $('section-count').classList.toggle('hidden', !list.length);
-    $('empty-state').classList.toggle('hidden', list.length > 0);
-
-    const ul = $('item-list');
-    ul.innerHTML = '';
-    for (const item of list) ul.appendChild(itemCard(item));
-  }
-
-  // Per-tab expired badges
-  for (const key of Object.keys(LOCATIONS)) {
-    const n = items.filter((i) => i.location === key && expiryStatus(i) === 'expired').length;
-    const badge = document.querySelector(`[data-badge="${key}"]`);
-    badge.textContent = n;
-    badge.classList.toggle('hidden', n === 0);
-  }
-
-  // Global toss alert
   const expired = items.filter((i) => expiryStatus(i) === 'expired');
   const chip = $('alert-chip');
   chip.classList.toggle('hidden', expired.length === 0);
-  if (expired.length) chip.textContent = `🗑️ ${expired.length} to toss`;
+  if (expired.length) chip.textContent = `${expired.length} to toss`;
+
+  const homeBadge = document.querySelector('[data-badge="home"]');
+  if (homeBadge) {
+    homeBadge.textContent = expired.length;
+    homeBadge.classList.toggle('hidden', expired.length === 0);
+  }
 
   document.querySelectorAll('.tab').forEach((t) =>
     t.classList.toggle('active', t.dataset.tab === currentTab)
   );
+}
+
+function renderDashboard() {
+  const dashboardItems = items
+    .slice()
+    .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.name.localeCompare(b.name));
+
+  const cards = dashboardItems.length ? dashboardCardsFor(dashboardItems) : DEMO_CATEGORIES;
+  const stack = $('category-cards');
+  stack.innerHTML = '';
+  for (const card of cards) stack.appendChild(categoryCard(card));
+
+  renderExpiringSoon();
+}
+
+function dashboardCardsFor(list) {
+  const groups = new Map();
+  for (const item of list) {
+    const title = itemCategory(item);
+    if (!groups.has(title)) groups.set(title, []);
+    groups.get(title).push(item);
+  }
+
+  const orderedTitles = [
+    ...CATEGORY_RULES.map((rule) => rule.title),
+    'Frozen',
+    'Pantry',
+    'Other',
+  ];
+
+  return [...groups.entries()]
+    .sort((a, b) => {
+      const ai = orderedTitles.indexOf(a[0]);
+      const bi = orderedTitles.indexOf(b[0]);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a[0].localeCompare(b[0]);
+    })
+    .map(([title, group]) => {
+      const minLeft = Math.min(...group.map((item) => daysLeft(item.expiresAt)));
+      return {
+        title,
+        badgeText: compactDaysLabel(minLeft),
+        tone: badgeTone(minLeft),
+        items: group.slice(0, 5).map((item) => ({
+          id: item.id,
+          name: item.name,
+          meta: dashboardMeta(item),
+          emoji: itemEmoji(item),
+        })),
+        extra: Math.max(0, group.length - 5),
+      };
+    });
+}
+
+function categoryCard(card) {
+  const article = document.createElement('article');
+  article.className = 'category-card';
+
+  const head = document.createElement('div');
+  head.className = 'category-card-head';
+  const title = document.createElement('h2');
+  title.className = 'category-title';
+  title.textContent = card.title;
+  const badge = document.createElement('span');
+  badge.className = `expiry-badge ${card.tone}`;
+  badge.textContent = card.badgeText;
+  head.append(title, badge);
+
+  const row = document.createElement('div');
+  row.className = 'dashboard-items';
+  for (const item of card.items) row.appendChild(dashboardItem(item));
+  if (card.extra > 0) {
+    row.appendChild(dashboardItem({
+      name: `${card.extra} more`,
+      meta: '',
+      emoji: '＋',
+      demo: true,
+    }));
+  }
+
+  article.append(head, row);
+  return article;
+}
+
+function dashboardItem(item) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'dashboard-item';
+  btn.disabled = item.demo || !item.id;
+  if (item.id) btn.addEventListener('click', () => openEdit(item.id));
+
+  const icon = document.createElement('span');
+  icon.className = 'dashboard-item-icon';
+  icon.textContent = item.emoji;
+  const name = document.createElement('span');
+  name.className = 'dashboard-item-name';
+  name.textContent = item.name;
+  const meta = document.createElement('span');
+  meta.className = 'dashboard-item-meta';
+  meta.textContent = item.meta;
+  btn.append(icon, name, meta);
+  return btn;
+}
+
+function renderExpiringSoon() {
+  const urgent = items
+    .filter((item) => daysLeft(item.expiresAt) <= SOON_DAYS)
+    .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.name.localeCompare(b.name))
+    .slice(0, 4);
+
+  const list = $('expiring-list');
+  list.innerHTML = '';
+  if (!urgent.length) {
+    const li = document.createElement('li');
+    li.className = 'expiring-empty';
+    li.textContent = 'Nothing urgent right now.';
+    list.appendChild(li);
+    return;
+  }
+
+  for (const item of urgent) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'expiring-card';
+    btn.addEventListener('click', () => openEdit(item.id));
+
+    const icon = document.createElement('span');
+    icon.className = 'expiring-icon';
+    icon.textContent = itemEmoji(item);
+    const main = document.createElement('span');
+    main.className = 'expiring-main';
+    const name = document.createElement('span');
+    name.className = 'expiring-name';
+    name.textContent = item.name;
+    const meta = document.createElement('span');
+    meta.className = 'expiring-meta';
+    meta.textContent = `${LOCATIONS[item.location].label} · ${expiryText(item)}`;
+    main.append(name, meta);
+    btn.append(icon, main);
+    li.appendChild(btn);
+    list.appendChild(li);
+  }
+}
+
+function renderInventoryList() {
+  $('section-title').textContent = 'Grocery List';
+  $('empty-emoji').textContent = '🛒';
+  $('empty-text').textContent = 'Nothing in here yet.';
+
+  const list = items
+    .slice()
+    .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt) || a.location.localeCompare(b.location) || a.name.localeCompare(b.name));
+
+  $('section-count').textContent = list.length ? `${list.length} item${list.length === 1 ? '' : 's'}` : '';
+  $('section-count').classList.toggle('hidden', !list.length);
+  $('empty-state').classList.toggle('hidden', list.length > 0);
+
+  const ul = $('item-list');
+  ul.innerHTML = '';
+  for (const item of list) ul.appendChild(itemCard(item));
 }
 
 function monthLabel(key) {
@@ -255,9 +472,10 @@ function itemCard(item, { tossOnly = false } = {}) {
   name.textContent = item.name;
   const exp = document.createElement('div');
   exp.className = `item-expiry ${status}`;
+  const locPrefix = currentTab === 'list' ? `${LOCATIONS[item.location].emoji} ${LOCATIONS[item.location].label} · ` : '';
   exp.textContent = tossOnly
     ? `${LOCATIONS[item.location].emoji} ${LOCATIONS[item.location].label} · ${expiryText(item)}`
-    : expiryText(item) + (item.price > 0 ? ` · ${fmtMoney(item.price)} · bought ${shortDate(purchaseDate(item))}` : '');
+    : locPrefix + expiryText(item) + (item.price > 0 ? ` · ${fmtMoney(item.price)} · bought ${shortDate(purchaseDate(item))}` : '');
   main.append(name, exp);
   if (!tossOnly) main.addEventListener('click', () => openEdit(item.id));
 
@@ -278,13 +496,17 @@ function itemCard(item, { tossOnly = false } = {}) {
 
 // ---------- add / edit modal ----------
 
+function defaultAddLocation() {
+  return Object.hasOwn(LOCATIONS, currentTab) ? currentTab : 'fridge';
+}
+
 function openEdit(id) {
   editingId = id || null;
   const item = id ? items.find((i) => i.id === id) : null;
   editingProductInfo = sanitizeProductInfo(item?.productInfo);
   $('edit-title').textContent = item ? 'Edit item' : 'Add item';
   $('edit-name').value = item ? item.name : '';
-  $('edit-location').value = item ? item.location : (currentTab === 'spend' ? 'pantry' : currentTab);
+  $('edit-location').value = item ? item.location : defaultAddLocation();
   $('edit-expires').value = item ? item.expiresAt : addDays(7);
   $('edit-purchased').value = item ? purchaseDate(item) : todayStr();
   $('edit-price').value = item && item.price > 0 ? item.price.toFixed(2) : '';
@@ -322,7 +544,7 @@ $('btn-edit-save').addEventListener('click', () => {
   }
   syncPurchase(item);
   persist();
-  currentTab = location;
+  if (currentTab !== 'list') currentTab = 'home';
   closeEdit();
   render();
 });
@@ -388,7 +610,12 @@ $('btn-edit-lookup').addEventListener('click', async () => {
 
 // ---------- add sheet ----------
 
-$('fab').addEventListener('click', () => $('sheet-backdrop').classList.remove('hidden'));
+function openAddSheet() {
+  $('sheet-backdrop').classList.remove('hidden');
+}
+
+$('fab').addEventListener('click', openAddSheet);
+$('btn-expiring-add').addEventListener('click', openAddSheet);
 $('btn-sheet-cancel').addEventListener('click', () => $('sheet-backdrop').classList.add('hidden'));
 $('sheet-backdrop').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
@@ -473,10 +700,15 @@ function restoreRefreshSnapshotIfNeeded() {
   savePurchases(purchases);
 }
 
-$('btn-update').addEventListener('click', async () => {
+function setUpdateRowBusy(isBusy) {
   const btn = $('btn-update');
-  btn.disabled = true;
-  btn.textContent = '…';
+  const action = btn.querySelector('.settings-action');
+  btn.disabled = isBusy;
+  if (action) action.textContent = isBusy ? '…' : '↻';
+}
+
+$('btn-update').addEventListener('click', async () => {
+  setUpdateRowBusy(true);
   showUpdateStatus('Checking for updates', 'Looking at GitHub for the newest version.');
 
   try {
@@ -511,8 +743,7 @@ $('btn-update').addEventListener('click', async () => {
   } catch (err) {
     showUpdateStatus('Could not check GitHub', err.message || 'Try again when you have a connection.');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '↻';
+    setUpdateRowBusy(false);
   }
 });
 
@@ -814,7 +1045,10 @@ $('btn-review-save').addEventListener('click', () => {
     syncPurchase(item);
     added++;
   }
-  if (added) persist();
+  if (added) {
+    persist();
+    currentTab = 'home';
+  }
   closeScan();
   render();
 });
@@ -852,6 +1086,10 @@ let pendingImport = null;
 
 $('btn-backup').addEventListener('click', () => $('backup-backdrop').classList.remove('hidden'));
 $('btn-backup-cancel').addEventListener('click', () => $('backup-backdrop').classList.add('hidden'));
+$('btn-spend').addEventListener('click', () => {
+  currentTab = 'spend';
+  render();
+});
 
 $('btn-export').addEventListener('click', () => {
   const payload = {
@@ -985,6 +1223,10 @@ $('btn-import-cancel').addEventListener('click', () => {
 
 document.querySelectorAll('.tab').forEach((tab) =>
   tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'scan') {
+      openAddSheet();
+      return;
+    }
     currentTab = tab.dataset.tab;
     render();
   })
