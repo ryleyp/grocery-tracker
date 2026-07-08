@@ -3,14 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#eef5ff">
+  <meta id="theme-color" name="theme-color" content="#eef5ff">
   <title>Grocery Tracker</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="css/styles.css?v=10">
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem('grocery-tracker-theme-v1');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      } catch {}
+    })();
+  </script>
+  <link rel="stylesheet" href="css/styles.css?v=11">
 </head>
 <body>
   <header class="app-header">
@@ -63,6 +74,14 @@
         <h2>Settings</h2>
       </div>
       <div class="settings-card">
+        <button id="btn-theme-toggle" class="settings-row" type="button" aria-pressed="false">
+          <span class="settings-icon">◐</span>
+          <span class="settings-copy">
+            <strong>Dark Mode</strong>
+            <small id="theme-mode-label">Light theme</small>
+          </span>
+          <span class="theme-switch" aria-hidden="true"><span class="theme-switch-thumb"></span></span>
+        </button>
         <button id="btn-update" class="settings-row" type="button">
           <span class="settings-icon">↻</span>
           <span class="settings-copy">
@@ -223,6 +242,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=10"></script>
+  <script type="module" src="js/app.js?v=11"></script>
 </body>
 </html>

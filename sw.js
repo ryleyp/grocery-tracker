@@ -1,10 +1,10 @@
-const CACHE = 'grocery-tracker-v10';
+const CACHE = 'grocery-tracker-v11';
 
 const APP_SHELL = [
   '.',
   'index.html',
-  'css/styles.css?v=10',
-  'js/app.js?v=10',
+  'css/styles.css?v=11',
+  'js/app.js?v=11',
   'js/store.js',
   'js/parser.js',
   'js/foodData.js',

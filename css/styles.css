@@ -13,13 +13,57 @@
   --card: #ffffff;
   --bubble: #edf3fc;
   --text: #111114;
+  --title: #050506;
   --muted: #6e6e73;
   --border: #dce8f7;
+  --card-border: rgba(229, 229, 234, 0.78);
+  --header-bg: rgba(238, 245, 255, 0.86);
+  --tab-bg: rgba(255, 255, 255, 0.78);
+  --tab-border: rgba(255, 255, 255, 0.7);
+  --tab-muted: #8e8e93;
+  --row-active: #f7f9fd;
+  --empty-bg: rgba(255, 255, 255, 0.72);
+  --empty-border: #d1d1d6;
+  --sheet-handle: #d1d1d6;
+  --backdrop: rgba(29, 29, 31, 0.32);
+  --review-bg: #fbfbfd;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
   --tab-h: 76px;
   --radius: 18px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --primary: #78a9ff;
+  --primary-deep: #a9c8ff;
+  --primary-soft: #162b4b;
+  --red: #ff8a96;
+  --red-soft: #3b1621;
+  --yellow: #f2d46d;
+  --yellow-soft: #352a10;
+  --blue: #78a9ff;
+  --blue-soft: #13233a;
+  --bg: #07111f;
+  --card: #101a2a;
+  --bubble: #17263b;
+  --text: #edf4ff;
+  --title: #f8fbff;
+  --muted: #98a7bd;
+  --border: #253854;
+  --card-border: rgba(107, 139, 190, 0.28);
+  --header-bg: rgba(7, 17, 31, 0.86);
+  --tab-bg: rgba(15, 26, 42, 0.82);
+  --tab-border: rgba(120, 169, 255, 0.16);
+  --tab-muted: #8795aa;
+  --row-active: #142239;
+  --empty-bg: rgba(16, 26, 42, 0.76);
+  --empty-border: #314763;
+  --sheet-handle: #435672;
+  --backdrop: rgba(0, 0, 0, 0.54);
+  --review-bg: #0c1726;
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
 }
 
 * { box-sizing: border-box; }
@@ -68,7 +112,7 @@ button {
   max-width: 480px;
   margin: 0 auto;
   padding: calc(env(safe-area-inset-top) + 22px) 20px 10px;
-  background: rgba(242, 242, 247, 0.86);
+  background: var(--header-bg);
   backdrop-filter: blur(18px);
 }
 
@@ -78,7 +122,7 @@ button {
 
 .app-header h1 {
   margin: 0;
-  color: #050506;
+  color: var(--title);
   font-size: 2.15rem;
   font-weight: 800;
   line-height: 1.06;
@@ -145,7 +189,7 @@ main {
 .section-head h2,
 .expiring-head h2 {
   margin: 0;
-  color: #070708;
+  color: var(--title);
   font-size: 1.18rem;
   font-weight: 800;
   line-height: 1.2;
@@ -178,7 +222,7 @@ main {
 
 .category-card {
   background: var(--card);
-  border: 1px solid rgba(229, 229, 234, 0.78);
+  border: 1px solid var(--card-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 15px 14px 14px;
@@ -196,7 +240,7 @@ main {
 .category-title {
   min-width: 0;
   margin: 0;
-  color: #111114;
+  color: var(--text);
   font-size: 1.12rem;
   font-weight: 800;
   line-height: 1.15;
@@ -227,51 +271,58 @@ main {
   color: var(--primary-deep);
 }
 
-.dashboard-items {
+.dashboard-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px 26px;
+  flex-direction: column;
+  gap: 9px;
 }
 
 .dashboard-item {
-  width: 76px;
-  min-height: 92px;
+  width: 100%;
+  min-height: 58px;
   border: none;
-  border-radius: 15px;
-  background: transparent;
+  border-radius: 14px;
+  background: var(--bubble);
   color: var(--text);
   display: grid;
-  grid-template-rows: 44px auto auto;
-  justify-items: center;
+  grid-template-columns: 42px minmax(0, 1fr) 16px;
+  gap: 11px;
   align-items: center;
-  padding: 0;
-  text-align: center;
+  padding: 9px 11px;
+  text-align: left;
 }
 
-.dashboard-item:not(:disabled):active {
+.dashboard-item:not([aria-disabled="true"]):active {
   transform: scale(0.96);
 }
 
-.dashboard-item:disabled {
+.dashboard-item[aria-disabled="true"] {
   cursor: default;
 }
 
 .dashboard-item-icon {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
   display: grid;
   place-items: center;
-  font-size: 2.2rem;
+  background: var(--card);
+  font-size: 1.7rem;
   line-height: 1;
+}
+
+.dashboard-item-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
 .dashboard-item-name {
   width: 100%;
-  margin-top: 4px;
-  color: #111114;
-  font-size: 0.91rem;
-  font-weight: 700;
-  line-height: 1.15;
+  color: var(--text);
+  font-size: 0.96rem;
+  font-weight: 760;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -279,14 +330,20 @@ main {
 
 .dashboard-item-meta {
   width: 100%;
-  margin-top: 2px;
   color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 500;
-  line-height: 1.1;
+  font-size: 0.82rem;
+  font-weight: 610;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dashboard-item-action {
+  color: var(--muted);
+  font-size: 1.1rem;
+  font-weight: 760;
+  line-height: 1;
 }
 
 .expiring-list,
@@ -339,7 +396,7 @@ main {
 
 .expiring-name {
   display: block;
-  color: #111114;
+  color: var(--text);
   font-size: 0.96rem;
   font-weight: 750;
   overflow: hidden;
@@ -357,8 +414,8 @@ main {
 
 .expiring-empty {
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px dashed #d1d1d6;
+  background: var(--empty-bg);
+  border: 1px dashed var(--empty-border);
   padding: 16px;
   color: var(--muted);
   font-size: 0.92rem;
@@ -378,7 +435,7 @@ main {
   align-items: center;
   gap: 12px;
   background: var(--card);
-  border: 1px solid rgba(229, 229, 234, 0.78);
+  border: 1px solid var(--card-border);
   border-radius: 17px;
   padding: 12px 13px;
   box-shadow: 0 5px 18px rgba(0, 0, 0, 0.055);
@@ -407,7 +464,7 @@ main {
 }
 
 .item-name {
-  color: #111114;
+  color: var(--text);
   font-size: 0.98rem;
   font-weight: 760;
   overflow: hidden;
@@ -488,7 +545,7 @@ main {
 }
 
 .settings-row:active {
-  background: #f7f7f9;
+  background: var(--row-active);
 }
 
 .settings-icon {
@@ -510,7 +567,7 @@ main {
 }
 
 .settings-copy strong {
-  color: #111114;
+  color: var(--text);
   font-size: 0.96rem;
   font-weight: 760;
   line-height: 1.2;
@@ -524,9 +581,39 @@ main {
 }
 
 .settings-action {
-  color: #8e8e93;
+  color: var(--tab-muted);
   font-size: 1.1rem;
   font-weight: 760;
+}
+
+.theme-switch {
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  transition: background 0.18s ease;
+}
+
+.theme-switch-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  transform: translateX(0);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+
+:root[data-theme="dark"] .theme-switch {
+  background: var(--primary);
+}
+
+:root[data-theme="dark"] .theme-switch-thumb {
+  background: #07111f;
+  transform: translateX(20px);
 }
 
 /* ---------- spend view ---------- */
@@ -572,7 +659,7 @@ main {
 
 .month-row {
   background: var(--card);
-  border: 1px solid rgba(229, 229, 234, 0.78);
+  border: 1px solid var(--card-border);
   border-radius: 16px;
   padding: 12px 14px;
   box-shadow: 0 5px 18px rgba(0, 0, 0, 0.055);
@@ -619,9 +706,9 @@ main {
   grid-template-columns: repeat(4, 1fr);
   gap: 2px;
   padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--tab-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--tab-bg);
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.14);
   backdrop-filter: blur(22px);
 }
@@ -632,7 +719,7 @@ main {
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: #8e8e93;
+  color: var(--tab-muted);
   display: grid;
   justify-items: center;
   align-content: center;
@@ -685,7 +772,7 @@ main {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(29, 29, 31, 0.32);
+  background: var(--backdrop);
   backdrop-filter: blur(7px);
 }
 
@@ -721,13 +808,13 @@ main {
   width: 38px;
   height: 5px;
   border-radius: 999px;
-  background: #d1d1d6;
+  background: var(--sheet-handle);
   transform: translateX(-50%);
 }
 
 .sheet-title {
   margin: 2px 4px 0;
-  color: #111114;
+  color: var(--text);
   font-size: 1.14rem;
   font-weight: 800;
 }
@@ -768,7 +855,7 @@ main {
 
 .modal h2 {
   margin: 0 0 6px;
-  color: #111114;
+  color: var(--text);
   font-size: 1.22rem;
   font-weight: 800;
 }
@@ -914,7 +1001,7 @@ main {
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: #fbfbfd;
+  background: var(--review-bg);
   padding: 12px;
 }
 
@@ -976,10 +1063,6 @@ main {
     padding-right: 18px;
   }
 
-  .dashboard-items {
-    gap: 14px 22px;
-  }
-
   .review-meta {
     grid-template-columns: 1fr 1fr;
   }
@@ -992,10 +1075,6 @@ main {
 @media (max-width: 360px) {
   .app-header h1 {
     font-size: 1.9rem;
-  }
-
-  .dashboard-item {
-    width: 68px;
   }
 
   .tab {

@@ -59,6 +59,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const REPO = 'ryleyp/grocery-tracker';
 const GITHUB_MAIN_COMMIT = `https://api.github.com/repos/${REPO}/commits/main`;
 const REFRESH_SNAPSHOT_KEY = 'grocery-tracker-refresh-snapshot-v1';
+const THEME_KEY = 'grocery-tracker-theme-v1';
+const THEME_COLORS = {
+  light: '#eef5ff',
+  dark: '#07111f',
+};
 
 let items = loadItems();
 let purchases = loadPurchases();
@@ -219,6 +224,52 @@ function persist() {
   saveItems(items);
 }
 
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+function applyTheme(theme, { persistChoice = false } = {}) {
+  const next = theme === 'dark' ? 'dark' : 'light';
+  if (next === 'dark') {
+    document.documentElement.dataset.theme = 'dark';
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+
+  const meta = $('theme-color');
+  if (meta) meta.setAttribute('content', THEME_COLORS[next]);
+
+  const toggle = $('btn-theme-toggle');
+  const label = $('theme-mode-label');
+  if (toggle) toggle.setAttribute('aria-pressed', String(next === 'dark'));
+  if (label) label.textContent = next === 'dark' ? 'Dark theme' : 'Light theme';
+
+  if (persistChoice) {
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {}
+  }
+}
+
+function initTheme() {
+  applyTheme(currentTheme());
+
+  $('btn-theme-toggle').addEventListener('click', () => {
+    applyTheme(currentTheme() === 'dark' ? 'light' : 'dark', { persistChoice: true });
+  });
+
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+  if (!media) return;
+  const syncSystemTheme = (e) => {
+    try {
+      if (localStorage.getItem(THEME_KEY)) return;
+    } catch {}
+    applyTheme(e.matches ? 'dark' : 'light');
+  };
+  if (media.addEventListener) media.addEventListener('change', syncSystemTheme);
+  else if (media.addListener) media.addListener(syncSystemTheme);
+}
+
 function render() {
   $('dashboard').classList.toggle('hidden', currentTab !== 'home');
   $('inventory').classList.toggle('hidden', currentTab !== 'list');
@@ -311,12 +362,12 @@ function categoryCard(card) {
   head.append(title, badge);
 
   const row = document.createElement('div');
-  row.className = 'dashboard-items';
+  row.className = 'dashboard-list';
   for (const item of card.items) row.appendChild(dashboardItem(item));
   if (card.extra > 0) {
     row.appendChild(dashboardItem({
-      name: `${card.extra} more`,
-      meta: '',
+      name: `${card.extra} more item${card.extra === 1 ? '' : 's'}`,
+      meta: 'Open List to view everything',
       emoji: '＋',
       demo: true,
     }));
@@ -330,19 +381,30 @@ function dashboardItem(item) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'dashboard-item';
-  btn.disabled = item.demo || !item.id;
-  if (item.id) btn.addEventListener('click', () => openEdit(item.id));
+  if (item.id) {
+    btn.addEventListener('click', () => openEdit(item.id));
+  } else {
+    btn.setAttribute('aria-disabled', 'true');
+  }
 
   const icon = document.createElement('span');
   icon.className = 'dashboard-item-icon';
   icon.textContent = item.emoji;
+
+  const copy = document.createElement('span');
+  copy.className = 'dashboard-item-copy';
   const name = document.createElement('span');
   name.className = 'dashboard-item-name';
   name.textContent = item.name;
   const meta = document.createElement('span');
   meta.className = 'dashboard-item-meta';
   meta.textContent = item.meta;
-  btn.append(icon, name, meta);
+  copy.append(name, meta);
+
+  const action = document.createElement('span');
+  action.className = 'dashboard-item-action';
+  action.textContent = item.id ? '›' : '';
+  btn.append(icon, copy, action);
   return btn;
 }
 
@@ -1242,6 +1304,7 @@ for (const id of ['edit-backdrop', 'scan-backdrop', 'toss-backdrop', 'backup-bac
 // ---------- boot ----------
 
 restoreRefreshSnapshotIfNeeded();
+initTheme();
 render();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
